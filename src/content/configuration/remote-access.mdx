@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # Remote Access
 
 Homun runs on `localhost:18443` by default and is not accessible from other devices. This page covers every method to access Homun remotely, from the simplest (SSH tunnel) to production-grade (reverse proxy with TLS), along with security hardening for each approach.
@@ -12,8 +14,14 @@ Homun runs on `localhost:18443` by default and is not accessible from other devi
 | Reverse Proxy | Medium | High | Production, custom domain, multi-user |
 | Direct Binding | Minimal | Low | LAN-only testing (not recommended) |
 
-## SSH Tunnel (Simplest)
+<Callout type="warning">
+When exposing Homun remotely, always tighten security settings: enable 2FA, shorten session TTL, enable device approval, and lower rate limits. See the "Security Hardening for Remote Access" section below.
+</Callout>
 
+## Access Methods
+
+<Tabs items={['SSH Tunnel', 'Tailscale', 'Cloudflare Tunnel', 'Reverse Proxy', 'Docker']}>
+  <Tabs.Tab>
 Forward the port over SSH with no configuration changes to Homun:
 
 ```bash
@@ -47,9 +55,8 @@ autossh -M 0 -f -N -L 18443:localhost:18443 \
 **Multiple devices**: Each device needs its own SSH tunnel. For access from phones or tablets, use Tailscale instead.
 
 Best for: quick access from a single laptop or workstation. Requires SSH access and the tunnel must stay open.
-
-## Tailscale (Recommended)
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 [Tailscale](https://tailscale.com) creates a private network between your devices. Once set up, every device on your tailnet can access Homun without port forwarding, firewall changes, or certificates.
 
 ### Setup
@@ -94,9 +101,8 @@ trust_x_forwarded_for = true
 ```
 
 Best for: secure access across all your devices (laptops, phones, tablets). End-to-end encrypted, no ports exposed to the public internet, automatic TLS.
-
-## Cloudflare Tunnel
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 Cloudflare Tunnel (formerly Argo Tunnel) exposes Homun through Cloudflare's network without opening any inbound ports.
 
 ### Setup
@@ -146,9 +152,8 @@ sudo cloudflared service install
 For additional authentication, pair the tunnel with Cloudflare Access to require a second identity verification (email OTP, SSO, etc.) before users can even reach Homun's login page.
 
 Best for: public access without port forwarding, paired with Cloudflare Access for additional authentication layers. Requires a Cloudflare account and domain.
-
-## Reverse Proxy
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 For production deployments with a custom domain and real TLS certificate, use a reverse proxy. All proxy configurations below handle WebSocket connections (required for chat) and set appropriate timeouts for LLM requests.
 
 ### Caddy (Automatic TLS)
@@ -165,9 +170,7 @@ homun.example.com {
 }
 ```
 
-The `tls_insecure_skip_verify` is needed because Homun uses a self-signed certificate on its end. Caddy handles the public-facing TLS.
-
-Caddy handles WebSocket upgrade automatically. No additional configuration is needed for chat streaming.
+The `tls_insecure_skip_verify` is needed because Homun uses a self-signed certificate on its end. Caddy handles the public-facing TLS. Caddy handles WebSocket upgrade automatically.
 
 ### Nginx
 
@@ -204,11 +207,9 @@ server {
 }
 ```
 
-**Important Nginx notes**:
-- The `proxy_read_timeout 300s` is critical. LLM responses can take 30+ seconds for complex queries. The default 60s timeout will cause errors.
-- WebSocket headers (`Upgrade`, `Connection`) are required for the chat interface to work.
-- `proxy_ssl_verify off` is needed because Homun uses a self-signed cert internally.
-- The `proxy_set_header X-Forwarded-For` line is needed for per-IP rate limiting to work correctly.
+<Callout type="warning">
+The `proxy_read_timeout 300s` is critical. LLM responses can take 30+ seconds for complex queries. The default 60s timeout will cause errors. WebSocket headers (`Upgrade`, `Connection`) are required for the chat interface to work.
+</Callout>
 
 ### Obtaining TLS Certificates with Certbot
 
@@ -258,9 +259,8 @@ trust_x_forwarded_for = true
 ```
 
 **Only enable this when behind a trusted proxy.** If Homun is directly exposed, clients can forge this header to bypass rate limits.
-
-## Docker Deployment
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 When running Homun in Docker, mount the data directory and expose the port:
 
 ```bash
@@ -316,10 +316,14 @@ homun.example.com {
     }
 }
 ```
+  </Tabs.Tab>
+</Tabs>
 
 ## Security Hardening for Remote Access
 
-When exposing Homun remotely, tighten these settings regardless of which method you use:
+<Callout type="info">
+When exposing Homun remotely, tighten these settings regardless of which method you use. For remote access, two-factor authentication is strongly recommended. See [Security > Two-Factor Authentication](/configuration/security#two-factor-authentication-totp).
+</Callout>
 
 ```toml
 [channels.web]
@@ -337,10 +341,6 @@ auth_rate_limit_per_minute = 3
 | `session_ttl_secs` | `86400` (24h) | `3600` (1h) | Shorter sessions reduce risk of stolen cookies |
 | `trust_x_forwarded_for` | `false` | `true` (behind proxy) | Use real IP for rate limits and logs |
 | `auth_rate_limit_per_minute` | `5` | `3` | Fewer login attempts allowed per minute |
-
-### Enable 2FA
-
-For remote access, two-factor authentication is strongly recommended. See [Security > Two-Factor Authentication](/configuration/security#two-factor-authentication-totp).
 
 ## Device Approval
 
@@ -386,7 +386,9 @@ If your server runs a firewall, you only need to open the ports used by your cho
 | Reverse Proxy | 80, 443 (HTTP/HTTPS) |
 | Direct Binding | 18443 (not recommended) |
 
+<Callout type="info">
 Tailscale and Cloudflare Tunnel both work through outbound connections, so no inbound ports need to be opened on your firewall. This is a significant security advantage.
+</Callout>
 
 ## Mobile Access
 
@@ -403,6 +405,10 @@ The Homun Web UI can be installed as a PWA (Progressive Web App) on mobile devic
 
 ## Port Forwarding (Not Recommended)
 
+<Callout type="error">
+Direct port forwarding is not recommended because Homun's self-signed TLS certificate will trigger browser warnings, your server is directly exposed to the internet, and rate limiting is the only protection against brute-force attacks. If you must use port forwarding, apply all security hardening settings and enable 2FA.
+</Callout>
+
 For completeness, you can expose Homun directly by changing the bind address:
 
 ```toml
@@ -412,11 +418,3 @@ port = 18443
 ```
 
 Then configure port forwarding on your router to direct external traffic to port 18443 on your server.
-
-**This is not recommended** because:
-- Homun's self-signed TLS certificate will trigger browser warnings
-- Your server is directly exposed to the internet
-- No additional security layer between the internet and Homun
-- Rate limiting is the only protection against brute-force attacks
-
-If you must use port forwarding, apply all security hardening settings and enable 2FA.

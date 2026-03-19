@@ -1,3 +1,5 @@
+import { Callout, Cards } from 'nextra/components'
+
 # Channels
 
 Channels are the messaging integrations that connect Homun to your communication tools. You can talk to Homun through Telegram, WhatsApp, Discord, Slack, Email, the built-in Web UI, or the command-line. All channels run concurrently within a single `homun gateway` process — enable as many as you need.
@@ -38,11 +40,15 @@ Channel (delivers response)
 5. The **AgentLoop** processes the message — reasoning, calling tools, generating a response
 6. The response is wrapped in an **OutboundMessage** and sent back through the originating channel
 
+<Callout type="info">
 This architecture means Homun behaves consistently across all channels: same tools, same memory, same personality. A conversation started on Telegram can be referenced from the Web UI because they share the same underlying memory and knowledge base.
+</Callout>
 
 ## Channel Selection Guide
 
-Choosing the right channel depends on your use case:
+<Callout type="info">
+Choosing the right channel depends on your use case. You can enable multiple channels simultaneously — they all share the same agent loop, memory, and tools.
+</Callout>
 
 **For personal daily use**: Telegram or WhatsApp. Both work on mobile and desktop, support media, and feel like chatting with a contact. Telegram is easier to set up (just a bot token), while WhatsApp integrates with your existing phone number.
 
@@ -133,7 +139,9 @@ INFO Web server listening on https://127.0.0.1:18443
 
 ## Security
 
-Every channel enforces authentication before accepting messages:
+<Callout type="warning">
+Every channel enforces authentication before accepting messages. Make sure to configure authentication for any channel exposed to untrusted users.
+</Callout>
 
 - **Pairing channels** (Telegram, WhatsApp, Discord, Slack): when `pairing_required = true`, unknown senders receive a one-time 6-digit code. They must send it back to verify their identity. Once paired, they are remembered permanently.
 - **Allow-list channels**: the `allow_from` field restricts which users can interact. Supports user IDs, phone numbers, email addresses, or domain patterns depending on the channel.
@@ -142,6 +150,16 @@ Every channel enforces authentication before accepting messages:
 - **Gateway auth**: all channel authentication is centralized in the gateway (`agent/auth.rs`). Channels are transport-only — they forward messages and let the gateway decide whether to accept them.
 
 ## Supported Channels
+
+<Cards>
+  <Cards.Card title="Telegram" href="/channels/telegram" />
+  <Cards.Card title="WhatsApp" href="/channels/whatsapp" />
+  <Cards.Card title="Discord" href="/channels/discord" />
+  <Cards.Card title="Slack" href="/channels/slack" />
+  <Cards.Card title="Email" href="/channels/email" />
+  <Cards.Card title="Web UI" href="/channels/web" />
+  <Cards.Card title="CLI" href="/channels/cli" />
+</Cards>
 
 | Channel | Transport | Auth Method | Setup Difficulty |
 |---|---|---|---|

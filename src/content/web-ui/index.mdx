@@ -1,3 +1,5 @@
+import { Callout, Cards } from 'nextra/components'
+
 # Web UI
 
 Homun includes a full-featured web interface for managing your assistant, chatting, configuring channels, building automations, and accessing every aspect of the system. The Web UI is built into the Homun binary -- no separate frontend server or build step is needed.
@@ -44,13 +46,6 @@ To allow only local connections (no network access):
 host = "127.0.0.1"
 ```
 
-To change the port:
-
-```toml
-[web]
-port = 9443
-```
-
 ### Authentication
 
 The Web UI is protected by password authentication:
@@ -62,6 +57,25 @@ The Web UI is protected by password authentication:
 ## Pages
 
 The Web UI includes 20 pages organized in the sidebar. Each page provides a focused view of one aspect of Homun.
+
+<Cards>
+  <Cards.Card title="Dashboard" href="#dashboard" />
+  <Cards.Card title="Chat" href="/web-ui/chat" />
+  <Cards.Card title="Channels" href="#channels" />
+  <Cards.Card title="Automations" href="#automations" />
+  <Cards.Card title="Workflows" href="#workflows" />
+  <Cards.Card title="Skills" href="#skills" />
+  <Cards.Card title="MCP" href="#mcp" />
+  <Cards.Card title="Knowledge" href="#knowledge" />
+  <Cards.Card title="Memory" href="#memory" />
+  <Cards.Card title="Vault" href="#vault" />
+  <Cards.Card title="Browser" href="#browser" />
+  <Cards.Card title="Approvals" href="#approvals" />
+  <Cards.Card title="Logs" href="#logs" />
+  <Cards.Card title="Account" href="#account" />
+  <Cards.Card title="Settings" href="#settings" />
+  <Cards.Card title="Setup Wizard" href="/web-ui/setup-wizard" />
+</Cards>
 
 ### Dashboard
 
@@ -88,8 +102,6 @@ View and configure all messaging channels:
 - **Health**: connection status, last message time, error counts
 
 Supported channels: Telegram, Discord, Slack, WhatsApp, Email, Web (WebSocket), CLI.
-
-Each channel shows a card with its current status (connected/disconnected), configuration fields, and a test button to verify the connection.
 
 ### Automations
 
@@ -183,8 +195,6 @@ Review and act on pending approval requests:
 - **Actions**: approve or reject each request
 - **History**: past approvals with timestamps and decisions
 
-Approvals come from workflows, the approval tool, and actions that require user confirmation.
-
 ### Logs
 
 Real-time log streaming and filtering:
@@ -194,8 +204,6 @@ Real-time log streaming and filtering:
 - **Text search**: filter logs by keyword
 - **Source filter**: filter by component (agent, tools, channels, web, etc.)
 
-Useful for debugging issues, monitoring agent behavior, and understanding what Homun is doing.
-
 ### Account
 
 User settings and security:
@@ -204,8 +212,6 @@ User settings and security:
 - **API keys**: generate and manage API bearer tokens for programmatic access
 - **2FA**: enable/disable TOTP two-factor authentication
 - **Sessions**: view and revoke active sessions
-
-API keys follow the format `wh_...` and can be used in the `Authorization: Bearer wh_...` header for API access.
 
 ### Settings
 
@@ -243,20 +249,11 @@ System maintenance tools:
 - **Cache**: clear caches (embeddings, search index)
 - **Updates**: check for Homun updates
 
-### Login
-
-The authentication screen. Appears when not logged in. Features:
-- Username and password fields
-- Rate limiting (5 attempts per minute)
-- Redirect to setup wizard if no account exists
-
-### Setup Wizard
-
-First-time configuration flow. See [Setup Wizard](/web-ui/setup-wizard) for details.
-
 ## Design System
 
-The Web UI uses the **Olive Moss Console** design system, inspired by Braun's design principles: clarity, order, and function over decoration.
+<Callout type="info">
+The Web UI uses the **Olive Moss Console** design system, inspired by Braun's design principles: clarity, order, and function over decoration. All colors, spacing, and typography use CSS custom properties, making the UI consistent and themeable.
+</Callout>
 
 ### Key Design Principles
 
@@ -304,35 +301,11 @@ The Web UI is fully responsive and works on mobile devices (375px and up):
 
 All features work on mobile. The layout adjusts at breakpoints: 390px, 768px, 1024px, and 1280px.
 
-## API Access
-
-Every action available in the Web UI is also available via the REST API. All API endpoints are under `/api/v1/`:
-
-```bash
-# Authentication
-curl -X POST https://localhost:18443/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password"}'
-
-# Or use an API key
-curl https://localhost:18443/api/v1/sessions \
-  -H "Authorization: Bearer wh_your_api_key"
-```
-
-The API returns JSON responses and follows REST conventions. See the API documentation for the full endpoint list.
-
 ## Component States
 
-Every component in the Web UI handles four states:
-
-| State | What the user sees |
-|-------|-------------------|
-| **Empty** | A helpful message explaining what this feature does and how to get started |
-| **Loading** | A spinner or skeleton placeholder |
-| **Error** | An error message with context and suggested fix |
-| **Success** | The expected content or a confirmation message |
-
-This ensures the UI is always informative, even when things go wrong or when a feature has not been used yet.
+<Callout type="info">
+Every component in the Web UI handles four states: **empty** (helpful message explaining how to get started), **loading** (spinner or skeleton), **error** (error message with suggested fix), and **success** (expected content). This ensures the UI is always informative, even when things go wrong.
+</Callout>
 
 ## Troubleshooting
 

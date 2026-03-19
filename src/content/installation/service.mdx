@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # System Service
 
 Install Homun as an OS service so it starts automatically on boot and runs in the background.
@@ -15,10 +17,14 @@ homun service install
 
 The service runs `homun gateway`, which includes the Web UI, all channels, scheduled tasks, and the heartbeat system.
 
+<Callout type="info">
+The service runs as your user (not root). It starts `homun gateway` and restarts automatically on failure. It is configured to auto-start when you log in.
+</Callout>
+
 ## Managing the Service
 
-### macOS (launchd)
-
+<Tabs items={['macOS (launchd)', 'Linux (systemd)']}>
+  <Tabs.Tab>
 ```bash
 # Start
 launchctl load ~/Library/LaunchAgents/dev.homun.plist
@@ -30,8 +36,27 @@ launchctl unload ~/Library/LaunchAgents/dev.homun.plist
 launchctl list | grep homun
 ```
 
-### Linux (systemd)
+### Logs
 
+Logs are written to `~/Library/Logs/homun/`:
+
+```bash
+tail -f ~/Library/Logs/homun/homun.log
+```
+
+### Disable Auto-Start
+
+```bash
+launchctl unload -w ~/Library/LaunchAgents/dev.homun.plist
+```
+
+### Re-enable Auto-Start
+
+```bash
+launchctl load -w ~/Library/LaunchAgents/dev.homun.plist
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
 ```bash
 # Start
 systemctl --user start homun
@@ -46,17 +71,7 @@ systemctl --user restart homun
 systemctl --user status homun
 ```
 
-## Logs
-
-### macOS
-
-Logs are written to `~/Library/Logs/homun/`:
-
-```bash
-tail -f ~/Library/Logs/homun/homun.log
-```
-
-### Linux
+### Logs
 
 View logs with `journalctl`:
 
@@ -64,31 +79,19 @@ View logs with `journalctl`:
 journalctl --user -u homun -f
 ```
 
-## Auto-Start on Boot
+### Disable Auto-Start
 
-The service is configured to start automatically when you log in. To disable auto-start:
-
-**macOS:**
-```bash
-launchctl unload -w ~/Library/LaunchAgents/dev.homun.plist
-```
-
-**Linux:**
 ```bash
 systemctl --user disable homun
 ```
 
-To re-enable:
+### Re-enable Auto-Start
 
-**macOS:**
-```bash
-launchctl load -w ~/Library/LaunchAgents/dev.homun.plist
-```
-
-**Linux:**
 ```bash
 systemctl --user enable homun
 ```
+  </Tabs.Tab>
+</Tabs>
 
 ## Uninstall the Service
 
@@ -96,4 +99,6 @@ systemctl --user enable homun
 homun service uninstall
 ```
 
+<Callout type="info">
 This stops the service and removes the service file. Your data in `~/.homun/` is not affected.
+</Callout>

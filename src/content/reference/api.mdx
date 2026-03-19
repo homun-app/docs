@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # REST API
 
 Homun exposes a REST API at `/api/v1/` for programmatic access to all features. The API uses JSON for request and response bodies, supports both session-based and token-based authentication, and includes real-time streaming via WebSocket and SSE endpoints.
@@ -16,16 +18,31 @@ Replace `localhost:18443` with your server address if accessing remotely.
 
 Every API request (except `/api/v1/health`) must be authenticated using one of:
 
-- **Session cookie** -- set automatically after web login (used by the Web UI)
-- **Bearer token** -- API key with `wh_` prefix
+<Tabs items={['Session Cookie', 'API Key (Bearer Token)', 'CSRF Token']}>
+  <Tabs.Tab>
+Session cookies are set automatically after web login and used by the Web UI. The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`.
 
 ```bash
-# Using a bearer token
+# Login to get a session cookie
+curl -c cookies.txt -X POST https://localhost:18443/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
+
+# Use the session cookie
+curl -b cookies.txt https://localhost:18443/api/v1/status
+```
+
+If 2FA is enabled, the login response includes `requires_2fa: true` and you must call the login endpoint again with a `totp_code` field.
+  </Tabs.Tab>
+  <Tabs.Tab>
+API keys are the recommended approach for programmatic access. Create keys from the Web UI under **Account > API Keys** or via the API itself.
+
+```bash
 curl -H "Authorization: Bearer wh_your_token" \
   https://localhost:18443/api/v1/status
 ```
 
-Create API keys from the Web UI under **Account > API Keys** or via the API itself. Each key has a scope (`admin`, `chat`, or `read`) that limits what it can access.
+Each key has a scope (`admin`, `chat`, or `read`) that limits what it can access.
 
 ### Scope Permissions
 
@@ -35,12 +52,12 @@ Create API keys from the Web UI under **Account > API Keys** or via the API itse
 | `chat` | Yes | Chat only | No |
 | `admin` | Yes | Yes | Yes |
 
-## CSRF Protection
-
+API keys bypass CSRF checks and 2FA requirements.
+  </Tabs.Tab>
+  <Tabs.Tab>
 State-changing requests (POST, PUT, PATCH, DELETE) from **web sessions** require a CSRF token. The token is provided in the `homun_csrf` cookie and must be sent in the `X-CSRF-Token` header.
 
 ```bash
-# For session-based auth (web UI), include the CSRF token
 curl -X POST https://localhost:18443/api/v1/chat \
   -H "Cookie: homun_session=..." \
   -H "X-CSRF-Token: csrf_token_value" \
@@ -48,11 +65,15 @@ curl -X POST https://localhost:18443/api/v1/chat \
   -d '{"message": "hello"}'
 ```
 
-**Bearer token authentication bypasses CSRF checks** since tokens are not vulnerable to CSRF attacks. This is the recommended approach for programmatic access.
+Bearer token authentication bypasses CSRF checks since tokens are not vulnerable to CSRF attacks.
+  </Tabs.Tab>
+</Tabs>
 
 ## Rate Limiting
 
-API calls are rate-limited per IP address. Limits can be customized in the [security configuration](/configuration/security).
+<Callout type="warning">
+API calls are rate-limited per IP address. When a limit is exceeded, Homun returns HTTP 429 with a `Retry-After` header. Limits can be customized in the [security configuration](/configuration/security).
+</Callout>
 
 | Category | Default | Header |
 |----------|---------|--------|
@@ -140,10 +161,6 @@ curl -H "Authorization: Bearer wh_token" \
 }
 ```
 
-**POST /api/v1/estop**
-
-Triggers emergency stop. See [Security > E-Stop](/configuration/security#emergency-stop-e-stop).
-
 ### Authentication
 
 | Method | Path | Auth | Description |
@@ -151,16 +168,6 @@ Triggers emergency stop. See [Security > E-Stop](/configuration/security#emergen
 | POST | `/api/auth/login` | No | Log in with username and password |
 | POST | `/api/auth/logout` | session | End the current session |
 | GET | `/api/v1/account` | read | Get current user info |
-
-**POST /api/auth/login**
-
-```bash
-curl -X POST https://localhost:18443/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password"}'
-```
-
-On success, returns a `Set-Cookie` header with the session cookie. If 2FA is enabled, the response includes a `requires_2fa: true` field and you must call the login endpoint again with a `totp_code` field.
 
 ### Sessions
 
@@ -172,26 +179,6 @@ On success, returns a `Set-Cookie` header with the session cookie. If 2FA is ena
 | DELETE | `/api/v1/sessions/:id` | chat | Delete a session and its messages |
 | GET | `/api/v1/sessions/:id/messages` | read | Get all messages in a session |
 
-**GET /api/v1/sessions**
-
-```bash
-curl -H "Authorization: Bearer wh_token" \
-  https://localhost:18443/api/v1/sessions
-```
-
-```json
-{
-  "sessions": [
-    {
-      "id": "sess_abc123",
-      "title": "Help with Rust code",
-      "created_at": "2025-01-15T10:30:00Z",
-      "message_count": 12
-    }
-  ]
-}
-```
-
 ### Chat
 
 | Method | Path | Auth | Description |
@@ -199,9 +186,11 @@ curl -H "Authorization: Bearer wh_token" \
 | POST | `/api/v1/chat` | chat | Send a message and get a streamed response |
 | POST | `/api/v1/chat/upload` | chat | Upload a file attachment for the next message |
 
-**POST /api/v1/chat**
+<Callout type="info">
+The chat endpoint streams responses as Server-Sent Events (SSE). Use `curl -N` or an SSE client to receive the stream. Events include `text` (response tokens), `tool_use`/`tool_result` (tool calls), and `done` (completion).
+</Callout>
 
-Send a message. The response is streamed as Server-Sent Events (SSE):
+**POST /api/v1/chat**
 
 ```bash
 curl -N -H "Authorization: Bearer wh_token" \
@@ -230,35 +219,6 @@ data: {"type": "done"}
 | DELETE | `/api/v1/skills/:name` | admin | Remove an installed skill |
 | POST | `/api/v1/skills/search` | read | Search for skills |
 
-**GET /api/v1/skills**
-
-```bash
-curl -H "Authorization: Bearer wh_token" \
-  https://localhost:18443/api/v1/skills
-```
-
-```json
-{
-  "skills": [
-    {
-      "name": "weather",
-      "description": "Check weather forecasts for any location",
-      "source": "github:user/weather-skill",
-      "version": "1.0.0"
-    }
-  ]
-}
-```
-
-**POST /api/v1/skills/install**
-
-```bash
-curl -X POST -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{"repo": "owner/skill-name"}' \
-  https://localhost:18443/api/v1/skills/install
-```
-
 ### Knowledge Base (RAG)
 
 | Method | Path | Auth | Description |
@@ -268,43 +228,12 @@ curl -X POST -H "Authorization: Bearer wh_token" \
 | POST | `/api/v1/knowledge/search` | read | Semantic search the knowledge base |
 | DELETE | `/api/v1/knowledge/:id` | admin | Remove an ingested document |
 
-**POST /api/v1/knowledge/search**
-
-```bash
-curl -X POST -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "deployment best practices", "limit": 5}' \
-  https://localhost:18443/api/v1/knowledge/search
-```
-
-```json
-{
-  "results": [
-    {
-      "id": 42,
-      "source": "deployment-guide.md",
-      "chunk": "Always use rolling deployments...",
-      "score": 0.89
-    }
-  ]
-}
-```
-
 ### Memory
 
 | Method | Path | Auth | Description |
 |--------|------|:----:|-------------|
 | GET | `/api/v1/memories` | read | List memories |
 | POST | `/api/v1/memories/search` | read | Search memories by query |
-
-**POST /api/v1/memories/search**
-
-```bash
-curl -X POST -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "favorite programming language"}' \
-  https://localhost:18443/api/v1/memories/search
-```
 
 ### Automations
 
@@ -318,20 +247,6 @@ curl -X POST -H "Authorization: Bearer wh_token" \
 | POST | `/api/v1/automations/:id/run` | admin | Run an automation immediately |
 | POST | `/api/v1/automations/:id/toggle` | admin | Enable or disable an automation |
 | GET | `/api/v1/automations/:id/history` | read | Get execution history |
-
-**POST /api/v1/automations**
-
-```bash
-curl -X POST -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Daily News Summary",
-    "prompt": "Search for today top tech news and summarize them",
-    "cron": "0 9 * * *",
-    "deliver_to": "telegram:123456"
-  }' \
-  https://localhost:18443/api/v1/automations
-```
 
 ### Workflows
 
@@ -351,15 +266,6 @@ curl -X POST -H "Authorization: Bearer wh_token" \
 | GET | `/api/v1/config` | admin | Get current configuration (secrets masked) |
 | PATCH | `/api/v1/config` | admin | Update configuration values |
 
-**PATCH /api/v1/config**
-
-```bash
-curl -X PATCH -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{"providers.default": "openai/gpt-4o"}' \
-  https://localhost:18443/api/v1/config
-```
-
 ### Vault
 
 | Method | Path | Auth | Description |
@@ -368,15 +274,6 @@ curl -X PATCH -H "Authorization: Bearer wh_token" \
 | GET | `/api/v1/vault/:key` | admin | Get a secret value |
 | PUT | `/api/v1/vault/:key` | admin | Store or update a secret |
 | DELETE | `/api/v1/vault/:key` | admin | Remove a secret |
-
-**PUT /api/v1/vault/:key**
-
-```bash
-curl -X PUT -H "Authorization: Bearer wh_token" \
-  -H "Content-Type: application/json" \
-  -d '{"value": "sk-ant-api03-..."}' \
-  https://localhost:18443/api/v1/vault/ANTHROPIC_API_KEY
-```
 
 ### Account and API Keys
 
@@ -390,117 +287,24 @@ curl -X PUT -H "Authorization: Bearer wh_token" \
 | POST | `/api/v1/account/2fa/verify` | admin | Verify and activate 2FA |
 | POST | `/api/v1/account/2fa/disable` | admin | Disable 2FA |
 
-### Devices
+### Devices, Channels, Providers, MCP, Contacts, Business, Approvals, Logs, Maintenance, Usage, Sandbox, Webhooks
 
 | Method | Path | Auth | Description |
 |--------|------|:----:|-------------|
 | GET | `/api/v1/devices` | admin | List trusted devices |
-| POST | `/api/v1/devices/:id/approve` | admin | Approve a pending device |
-| DELETE | `/api/v1/devices/:id` | admin | Revoke a trusted device |
-
-### Channels
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/channels` | read | List channels and their status |
-| GET | `/api/v1/channels/whatsapp/pair` | admin | WebSocket for WhatsApp QR pairing |
-
-### Providers
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/providers` | read | List providers and health status |
 | GET | `/api/v1/providers/models` | read | List available models |
-
-### MCP Servers
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/mcp/servers` | read | List configured MCP servers |
-| POST | `/api/v1/mcp/servers` | admin | Add an MCP server |
-| DELETE | `/api/v1/mcp/servers/:name` | admin | Remove an MCP server |
-| POST | `/api/v1/mcp/servers/:name/toggle` | admin | Enable or disable an MCP server |
 | GET | `/api/v1/mcp/catalog` | read | List available MCP service presets |
-| POST | `/api/v1/mcp/setup` | admin | Guided MCP server setup |
-| GET | `/api/v1/mcp/oauth/callback` | No | OAuth callback for MCP service auth |
-
-### Contacts
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/contacts` | read | List all contacts |
-| POST | `/api/v1/contacts` | admin | Create a contact |
-| PUT | `/api/v1/contacts/:id` | admin | Update a contact |
-| DELETE | `/api/v1/contacts/:id` | admin | Delete a contact |
-
-### Business Autopilot
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/business/dashboard` | read | Business dashboard data |
-| GET | `/api/v1/business/transactions` | read | List transactions |
-
-### Approvals
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/approvals` | read | List pending approvals |
-| POST | `/api/v1/approvals/:id/approve` | admin | Approve a pending action |
-| POST | `/api/v1/approvals/:id/reject` | admin | Reject a pending action |
-
-### Logs
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/logs/stream` | admin | SSE stream of real-time logs |
-
-**GET /api/v1/logs/stream**
-
-Server-Sent Events stream of log entries:
-
-```bash
-curl -N -H "Authorization: Bearer wh_token" \
-  https://localhost:18443/api/v1/logs/stream
-```
-
-```
-data: {"timestamp": "2025-01-15T10:30:00Z", "level": "info", "message": "Agent loop started"}
-data: {"timestamp": "2025-01-15T10:30:01Z", "level": "debug", "message": "Using model anthropic/claude-sonnet-4-5-20250514"}
-```
-
-### Maintenance
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | POST | `/api/v1/maintenance/vacuum` | admin | Optimize the SQLite database |
-| GET | `/api/v1/maintenance/stats` | admin | Database statistics |
-
-### Usage
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/usage` | read | Usage statistics (requests, tokens, costs) |
-
-### Sandbox
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
 | GET | `/api/v1/sandbox` | read | Sandbox configuration and backend info |
-| PATCH | `/api/v1/sandbox` | admin | Update sandbox settings |
-
-### Webhooks
-
-| Method | Path | Auth | Description |
-|--------|------|:----:|-------------|
-| POST | `/api/v1/webhook/:token` | token | Ingest a message via webhook (no session auth) |
-
-Webhook tokens are created per-user:
-
-```bash
-homun users token --user alice --name "zapier-webhook"
-```
-
-The response includes the full webhook URL with the token embedded.
+| POST | `/api/v1/webhook/:token` | token | Ingest a message via webhook |
 
 ### OpenAI-Compatible API
 
@@ -518,11 +322,7 @@ The Web UI chat uses a WebSocket connection for real-time bidirectional communic
 wss://localhost:18443/ws
 ```
 
-The WebSocket requires session authentication (the session cookie is sent during the upgrade handshake). Messages are JSON-encoded. The WebSocket handles:
-- Sending user messages
-- Receiving streamed LLM responses
-- Tool use progress updates
-- Session management
+The WebSocket requires session authentication (the session cookie is sent during the upgrade handshake). Messages are JSON-encoded.
 
 ## Pagination
 

@@ -1,3 +1,5 @@
+import { Callout, FileTree } from 'nextra/components'
+
 # Memory & Knowledge
 
 Homun has a multi-layered memory system that gives it context across conversations, a persistent user profile, and a searchable knowledge base for your documents. Together, these layers let Homun remember who you are, what you have discussed, and reference your documents -- without you having to repeat yourself.
@@ -71,18 +73,11 @@ Consolidation runs on a configurable interval (default: every hour when the gate
 
 ### Daily Memory Files
 
-Consolidated memories are also written to daily files at `~/.homun/memory/YYYY-MM-DD.md`. These are human-readable summaries you can browse:
+Consolidated memories are also written to daily files at `~/.homun/memory/YYYY-MM-DD.md`. These are human-readable summaries you can browse.
 
-```
-~/.homun/memory/
-  2025-01-15.md
-  2025-01-16.md
-  2025-01-17.md
-```
-
-Each file contains the memories consolidated on that date, formatted as markdown. You can read these files directly to see what Homun remembers from each day.
-
-Do not edit these files -- Homun manages them automatically. If you want to correct a memory, use the Memory page in the Web UI or tell Homun directly.
+<Callout type="info">
+Do not edit the daily memory files -- Homun manages them automatically. If you want to correct a memory, use the Memory page in the Web UI or tell Homun directly.
+</Callout>
 
 ### What Gets Remembered
 
@@ -159,11 +154,19 @@ The file is plain markdown. Use whatever structure works for you -- Homun reads 
 
 ### Related Files
 
+<FileTree>
+  <FileTree.Folder name="~/.homun/brain/" defaultOpen>
+    <FileTree.File name="USER.md" />
+    <FileTree.File name="INSTRUCTIONS.md" />
+    <FileTree.File name="SOUL.md" />
+  </FileTree.Folder>
+</FileTree>
+
 | File | Purpose | Edited By |
 |------|---------|-----------|
-| `~/.homun/brain/USER.md` | User profile facts | `remember` tool or manual editing |
-| `~/.homun/brain/INSTRUCTIONS.md` | Behavioral instructions Homun has learned | Automatic consolidation |
-| `~/.homun/brain/SOUL.md` | Agent personality definition | User (manual edit only) |
+| `USER.md` | User profile facts | `remember` tool or manual editing |
+| `INSTRUCTIONS.md` | Behavioral instructions Homun has learned | Automatic consolidation |
+| `SOUL.md` | Agent personality definition | User (manual edit only) |
 
 **SOUL.md** defines Homun's personality and communication style. Edit it to change how Homun speaks and behaves. For example, you could make Homun more formal, more casual, use specific vocabulary, or adopt a particular tone. This file is never modified automatically -- only you can change it.
 
@@ -171,12 +174,13 @@ The file is plain markdown. Use whatever structure works for you -- Homun reads 
 
 ### File Sizes and Context Impact
 
-All brain files are included in every conversation's system prompt. Keep them concise:
+<Callout type="warning">
+All brain files are included in every conversation's system prompt. Keep them concise -- very large brain files consume tokens from the LLM's context window, leaving less room for the actual conversation.
+</Callout>
+
 - **USER.md**: aim for 50-200 lines. Focus on facts that are relevant across conversations.
 - **SOUL.md**: aim for 10-50 lines. A few paragraphs about personality and tone.
 - **INSTRUCTIONS.md**: grows organically. Homun prunes redundant instructions during consolidation.
-
-Very large brain files consume tokens from the LLM's context window, leaving less room for the actual conversation.
 
 ## Memory Search
 
@@ -206,22 +210,16 @@ Memory search uses a two-strategy approach for best results:
 
 The search runs automatically when the agent processes your message. It retrieves the top-ranked memories and includes them in the LLM context alongside your message. The agent then uses this context to inform its response.
 
-### When Memory Search Activates
-
-Memory search runs on most messages, but not all. The agent decides whether a query would benefit from memory context. Simple greetings or direct commands (like "list my files") typically skip the memory search to save latency.
-
 ### Embedding Providers
 
-Homun supports two embedding providers for vector search:
+<Callout type="info">
+Homun supports two embedding providers. The default `fastembed` runs locally with no network calls and no cost. OpenAI embeddings are higher-dimensional and may produce slightly better results, but require an API key. Changing providers requires re-indexing all existing data.
+</Callout>
 
 | Provider | Type | Model | Dimensions | Speed | Cost |
 |----------|------|-------|:----------:|:-----:|:----:|
 | fastembed | Local | all-MiniLM-L6-v2 | 384 | Fast, no network | Free |
 | openai | Cloud | text-embedding-3-small | 1536 | Requires API key | Per-token |
-
-Default is `fastembed` (local). The model loads into memory (~100-300 MB) on first use. Once loaded, embeddings are generated in milliseconds with no network calls.
-
-OpenAI embeddings are higher-dimensional and may produce slightly better semantic search results, but they require an API key and incur per-token costs.
 
 ```toml
 [knowledge]
@@ -290,50 +288,6 @@ curl -X POST https://localhost:18443/api/v1/knowledge/ingest \
   -F "file=@/path/to/document.pdf"
 ```
 
-### Chunking Strategy
-
-When a document is ingested, it goes through a chunking pipeline:
-
-1. **Parsing**: the document is parsed according to its format (PDF text extraction, DOCX XML parsing, code tokenization)
-2. **Splitting**: the content is split into chunks of approximately 500-1000 tokens each
-3. **Overlap**: adjacent chunks overlap by ~100 tokens to preserve context at boundaries
-4. **Metadata**: each chunk is tagged with the source document, page/section number, and chunk index
-5. **Embedding**: each chunk is converted to a vector embedding using the configured provider
-6. **Indexing**: chunks are inserted into both the HNSW vector index and the FTS5 text index
-
-The chunk size and overlap are configurable:
-
-```toml
-[knowledge]
-chunk_size = 800        # Target chunk size in tokens
-chunk_overlap = 100     # Overlap between adjacent chunks
-```
-
-Smaller chunks give more precise search results but may lose broader context. Larger chunks preserve more context but may include irrelevant information. The defaults work well for most use cases.
-
-### Searching the Knowledge Base
-
-The knowledge base is searched automatically when relevant to your question. Homun uses the same hybrid vector + FTS5 search as memory, so it finds both semantically similar and keyword-matching content.
-
-You can also search explicitly:
-
-> "Search my knowledge base for deployment procedures"
-
-Or via the API:
-
-```bash
-curl -X POST https://localhost:18443/api/v1/knowledge/search \
-  -H "Authorization: Bearer wh_your_token" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "deployment procedures", "limit": 10}'
-```
-
-Search results include:
-- The matching text chunk
-- The source document name and path
-- The page or section number
-- A relevance score
-
 ### Directory Watcher
 
 Point Homun at one or more directories and it will automatically ingest new or updated files:
@@ -350,11 +304,11 @@ The watcher monitors these directories for:
 
 Changes are detected using filesystem events (via the `notify` crate). The watcher is recursive -- it monitors subdirectories as well.
 
-This is useful for keeping your knowledge base in sync with a notes folder, project documentation directory, or any collection of files you update regularly.
-
 ### Sensitive Data Protection
 
-Documents containing sensitive information are automatically detected during ingestion. The sensitive data classifier scans for:
+<Callout type="warning">
+Documents containing sensitive information (API keys, passwords, credit card numbers, private keys) are automatically detected during ingestion. Sensitive content is vault-gated: encrypted and excluded from normal search results. It is only included when the query specifically relates to the sensitive topic and the user has appropriate access.
+</Callout>
 
 | Pattern | Action |
 |---------|--------|
@@ -363,8 +317,6 @@ Documents containing sensitive information are automatically detected during ing
 | Social security numbers | Vault-gated |
 | Credit card numbers | Vault-gated |
 | Private keys (SSH, PGP, etc.) | Vault-gated |
-
-Vault-gated content is stored encrypted and excluded from normal search results. It is only included when the query specifically relates to the sensitive topic and the user has appropriate access.
 
 This means you can safely ingest documents that contain API keys or credentials -- they will not accidentally appear in unrelated search results or be sent to the LLM in contexts where they are not needed.
 

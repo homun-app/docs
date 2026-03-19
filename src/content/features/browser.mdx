@@ -1,3 +1,5 @@
+import { Callout, Steps } from 'nextra/components'
+
 # Browser Automation
 
 Homun can browse the web autonomously using a built-in headless browser. It navigates pages, fills forms, clicks buttons, extracts information, and handles multi-step browsing tasks -- all controlled by the AI agent. This page covers setup, all 17 actions, stealth mode, persistent sessions, task planning, and practical examples.
@@ -27,32 +29,34 @@ Homun has two ways to access web content:
 | Interaction | Read-only | Click, type, scroll, fill forms |
 | Resource usage | Minimal | Memory-intensive (browser process) |
 
+<Callout type="info">
 The agent automatically chooses the right tool. For simple page reads, it uses `web_fetch`. For interactive tasks, forms, or JavaScript-heavy sites, it uses the browser.
+</Callout>
 
 ## Setup
 
-### Prerequisites
+<Steps>
+### Install Node.js
 
-- **Node.js** must be installed on your system (v18 or later)
-- Playwright is installed automatically via `npx @playwright/mcp` on first use
-- No manual browser installation needed -- Playwright downloads the browser binary
-
-Verify Node.js is available:
+Node.js must be installed on your system (v18 or later). Verify it is available:
 
 ```bash
 node --version    # Should be v18 or later
 npx --version
 ```
 
-### Configuration
-
-Enable browser automation in your config:
+### Enable browser in configuration
 
 ```toml
 [browser]
 enabled = true
 headless = true
 ```
+
+### First use downloads the browser
+
+On first use, Playwright downloads the browser binary (about 200-400 MB depending on the browser). This happens automatically and only once. Subsequent launches use the cached binary.
+</Steps>
 
 ### Configuration Options
 
@@ -63,12 +67,6 @@ headless = true
 | `browser_type` | String | `"chromium"` | Browser engine: `"chromium"`, `"firefox"`, or `"webkit"`. |
 
 The `enabled` and `headless` settings hot-reload -- changes take effect on the next browser session without restarting the gateway.
-
-### First-Time Setup
-
-On first use, Playwright downloads the browser binary (about 200-400 MB depending on the browser). This happens automatically and only once. Subsequent launches use the cached binary.
-
-If you are behind a proxy or firewall, you may need to set the `PLAYWRIGHT_DOWNLOAD_HOST` environment variable. See the Playwright documentation for proxy configuration.
 
 ## Browser Actions
 
@@ -140,11 +138,15 @@ This approach is more reliable than CSS selectors because:
 - The snapshot provides the full context (text, role, state) for each element
 - The agent can read the element's label and role to confirm it is clicking the right thing
 
+<Callout type="info">
 After any action that changes the page (click, type, navigate), Homun takes a new snapshot automatically. Old references become invalid -- always use references from the latest snapshot.
+</Callout>
 
 ## Anti-Bot Stealth
 
-Homun automatically injects stealth techniques when launching the browser. This makes the automated browser appear like a regular user session to website bot-detection systems.
+<Callout type="warning">
+Homun automatically injects stealth techniques when launching the browser. Stealth works against most standard bot detection but does not bypass CAPTCHAs, advanced commercial anti-bot services (Cloudflare Turnstile, PerimeterX), or IP-based rate limiting.
+</Callout>
 
 ### What Stealth Does
 
@@ -166,7 +168,9 @@ Stealth works against most standard bot detection. It does not bypass:
 
 ## Persistent Sessions
 
-The browser uses a persistent user data directory, which means state is preserved across browsing sessions:
+<Callout type="info">
+The browser uses a persistent user data directory, which means cookies, localStorage, IndexedDB, and service workers are preserved across browsing sessions. Log in once (manually or with Homun's help), and subsequent browser tasks can access the authenticated session without re-entering credentials.
+</Callout>
 
 | What Persists | Benefit |
 |--------------|---------|
@@ -174,8 +178,6 @@ The browser uses a persistent user data directory, which means state is preserve
 | localStorage | Site preferences and session tokens survive |
 | IndexedDB | Web app data is retained |
 | Service workers | PWA functionality works |
-
-This is especially useful for tasks that require authentication. Log in once (manually or with Homun's help), and subsequent browser tasks can access the authenticated session without re-entering credentials.
 
 ### Where Data Is Stored
 
@@ -262,12 +264,6 @@ homun cron add "0 */6 * * *" "Check the price of [product] on [website]. If it d
 
 Homun executes each step, reporting results and screenshots along the way. This is useful for smoke testing after deployments.
 
-### Social Media Monitoring
-
-> "Check my company's mentions on Twitter from the last 24 hours. Summarize the sentiment and highlight any complaints."
-
-Homun browses the platform, collects mentions, and provides a sentiment analysis.
-
 ## Security
 
 ### Browser Content Isolation
@@ -339,24 +335,8 @@ sudo apt install libnss3 libatk-bridge2.0-0 libdrm2 libxcomposite1 \
 - The element is hidden (display: none, visibility: hidden). It may need a hover or click on a parent element to become visible first.
 - The element loads dynamically. Use `wait` to wait for the element's text to appear before interacting.
 
-### Slow Page Loading
-
-**Symptom**: browser actions take a long time to complete.
-
-**Causes**:
-- Large pages with many resources. The stability check waits for the DOM to settle, which takes longer on complex pages.
-- Slow network connection. Browser automation requires downloading all page resources (CSS, JS, images).
-- Memory pressure. Each browser tab uses 100-500 MB of memory. Close unused tabs.
-
 ### Headless vs. Headed Mode
 
-For debugging browser issues, switch to headed mode to see what the browser is doing:
-
-```toml
-[browser]
-headless = false
-```
-
-This opens a visible browser window. You can watch the agent navigate, click, and type in real time. Useful during development and debugging, but not suitable for servers without a display.
-
-On a remote server without a display, you can use VNC or a remote desktop to view the headed browser.
+<Callout type="info">
+For debugging browser issues, switch to headed mode (`headless = false`) to see what the browser is doing in real time. Useful during development and debugging, but not suitable for servers without a display. On a remote server, you can use VNC or a remote desktop to view the headed browser.
+</Callout>

@@ -1,3 +1,5 @@
+import { Callout, Cards } from 'nextra/components'
+
 # Built-in Tools
 
 Homun comes with 20+ built-in tools that the agent uses to interact with your system, the web, and external services. Tools are the actions Homun can take -- reading files, searching the web, sending messages, running commands, and more. You do not need to invoke tools directly; the agent decides which tools to use based on your request.
@@ -15,15 +17,22 @@ This cycle continues until the agent has enough information to answer your quest
 
 ### Tool Execution Visibility
 
-In the Web UI, every tool call is visible in the chat timeline. You can expand each call to see:
-- Which tool was called and with what parameters
-- The tool's output
-- How long the call took
-- Whether it succeeded or failed
-
-This transparency lets you understand exactly what Homun did and why.
+<Callout type="info">
+In the Web UI, every tool call is visible in the chat timeline. You can expand each call to see which tool was called, with what parameters, the tool's output, how long the call took, and whether it succeeded or failed. This transparency lets you understand exactly what Homun did and why.
+</Callout>
 
 ## Tool Categories
+
+<Cards>
+  <Cards.Card title="File System" href="#file-system" />
+  <Cards.Card title="Shell" href="#shell" />
+  <Cards.Card title="Web & Search" href="#web--search" />
+  <Cards.Card title="Communication" href="#communication" />
+  <Cards.Card title="Memory & Knowledge" href="#memory--knowledge" />
+  <Cards.Card title="Security" href="#security" />
+  <Cards.Card title="Automation" href="#automation" />
+  <Cards.Card title="Skills & Extensions" href="#skills--extensions" />
+</Cards>
 
 ### File System
 
@@ -84,11 +93,6 @@ api_key = "your-api-key"
 
 **browser** provides full browser automation with 17 actions (navigate, click, type, screenshot, etc.). See the [Browser Automation](/features/browser) page for details. Use this for JavaScript-heavy sites, forms, and interactive pages.
 
-Example interactions:
-> "Search the web for Rust async best practices"
-> "Fetch the content of https://example.com/docs/api"
-> "Go to the admin panel and check the latest metrics"
-
 ### Communication
 
 | Tool | Description |
@@ -98,24 +102,7 @@ Example interactions:
 
 **message** sends a proactive message to you on a specified channel (Telegram, Discord, Slack, Email, Web). This is used by cron jobs, automations, and the heartbeat to reach you outside of an active conversation.
 
-**email_inbox** reads emails from your configured IMAP account. It can list messages, read specific emails, search by subject or sender, and check for new mail. Configuration:
-
-```toml
-[channels.email]
-imap_host = "imap.gmail.com"
-imap_port = 993
-imap_username = "you@gmail.com"
-imap_password = "your-app-password"
-smtp_host = "smtp.gmail.com"
-smtp_port = 587
-smtp_username = "you@gmail.com"
-smtp_password = "your-app-password"
-```
-
-Example interactions:
-> "Check my emails for anything from the accounting team"
-> "Send me a Telegram message with today's summary"
-> "Read the latest email from john@example.com"
+**email_inbox** reads emails from your configured IMAP account. It can list messages, read specific emails, search by subject or sender, and check for new mail.
 
 ### Memory & Knowledge
 
@@ -124,19 +111,9 @@ Example interactions:
 | **remember** | Save important information to your user profile |
 | **knowledge** | Search, ingest, and list documents in the knowledge base |
 
-**remember** writes facts to your user profile (`~/.homun/brain/USER.md`). This is the primary way Homun learns persistent information about you. The tool is smart about updates -- it adds new information, updates changed facts, and avoids duplicates.
+**remember** writes facts to your user profile (`~/.homun/brain/USER.md`). This is the primary way Homun learns persistent information about you.
 
-**knowledge** interacts with the RAG knowledge base. It supports three operations:
-- **search**: find relevant content in ingested documents
-- **ingest**: add a new document to the knowledge base
-- **list**: show all ingested documents
-
-See the [Memory & Knowledge](/features/memory) page for details on the memory architecture and RAG system.
-
-Example interactions:
-> "Remember that my preferred deployment window is Tuesday 2-4 PM"
-> "Search my knowledge base for the API authentication docs"
-> "Add this PDF to the knowledge base"
+**knowledge** interacts with the RAG knowledge base. It supports three operations: search, ingest, and list. See the [Memory & Knowledge](/features/memory) page for details.
 
 ### Security
 
@@ -145,19 +122,9 @@ Example interactions:
 | **vault** | Store and retrieve encrypted secrets |
 | **approval** | Request your confirmation before taking sensitive actions |
 
-**vault** manages Homun's encrypted secret store. Secrets are encrypted with AES-256-GCM and the master key is stored in your OS keychain. The vault is used for API keys, tokens, passwords, and any other sensitive values.
-
-Operations:
-- **set**: store a new secret
-- **get**: retrieve a secret (only used internally by skills and tools)
-- **delete**: remove a secret
-- **list**: show stored secret names (not values)
+**vault** manages Homun's encrypted secret store. Secrets are encrypted with AES-256-GCM and the master key is stored in your OS keychain.
 
 **approval** pauses execution and asks for your confirmation. This is used before sensitive actions (deleting files, sending emails, making purchases). You can approve or reject from any connected channel.
-
-Example interactions:
-> "Store my GitHub token in the vault"
-> "What secrets are stored in the vault?"
 
 ### Automation
 
@@ -168,18 +135,9 @@ Example interactions:
 | **automation** | Create and manage visual automations |
 | **workflow** | Build multi-step workflows with approval gates |
 
-**spawn** creates a background subagent that runs independently from the current conversation. This is useful for long-running tasks that should not block the chat. The subagent has access to all tools and memory.
+**spawn** creates a background subagent that runs independently from the current conversation. Useful for long-running tasks that should not block the chat.
 
 **cron** manages scheduled tasks. See the [Automations & Workflows](/features/automations) page for cron syntax and examples.
-
-**automation** creates and manages visual automations (the flow-based system in the Web UI).
-
-**workflow** creates and manages persistent multi-step workflows with approval gates, retry logic, and resume-on-boot.
-
-Example interactions:
-> "Run a background task to research competitors while we continue chatting"
-> "Schedule a daily email check at 9 AM"
-> "Create a workflow for content review and publishing"
 
 ### Skills & Extensions
 
@@ -188,20 +146,13 @@ Example interactions:
 | **skill_create** | Generate new skills using the LLM |
 | **mcp** | Manage MCP (Model Context Protocol) servers |
 
-**skill_create** generates a complete skill package (SKILL.md, scripts, frontmatter) from a natural language description. The generated skill is saved to `~/.homun/skills/` and immediately available.
+**skill_create** generates a complete skill package from a natural language description.
 
-**mcp** manages external MCP servers that extend Homun with additional tools. MCP is a protocol that lets AI assistants connect to external tool servers. Homun can discover, install, and manage MCP servers:
+<Callout type="info">
+Beyond the built-in tools, you can extend Homun with custom tools via MCP (Model Context Protocol) servers. Common MCP servers include database access (PostgreSQL, MySQL), GitHub, Slack, Google Drive, and custom REST API wrappers. Install from the Web UI under **MCP**, or via chat: "Install the Postgres MCP server".
+</Callout>
 
-- **list**: show connected MCP servers and their tools
-- **install**: install a new MCP server from the registry
-- **remove**: disconnect an MCP server
-
-See the [MCP Servers](/features/mcp) page for details.
-
-Example interactions:
-> "Create a skill that monitors my GitHub notifications"
-> "List all connected MCP servers"
-> "Install the Postgres MCP server so you can query my database"
+**mcp** manages external MCP servers that extend Homun with additional tools. MCP is a protocol that lets AI assistants connect to external tool servers.
 
 ## Tool Combinations
 
@@ -253,13 +204,9 @@ Disabled tools are not shown to the LLM and cannot be invoked.
 
 ### Tool Approval
 
-Some actions require your confirmation before executing. This is controlled by the autonomy level:
-
-- **Low autonomy**: Homun asks before most actions (file writes, shell commands, messages)
-- **Medium autonomy**: Homun asks before destructive actions (file deletes, sending messages to others)
-- **High autonomy**: Homun asks only before irreversible actions (sending emails, posting publicly)
-
-Configure autonomy in settings or via the Web UI.
+<Callout type="info">
+Some actions require your confirmation before executing. This is controlled by the autonomy level: **Low** (asks before most actions), **Medium** (asks before destructive actions), **High** (asks only before irreversible actions). Configure autonomy in settings or via the Web UI.
+</Callout>
 
 ## Troubleshooting
 

@@ -1,3 +1,5 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
 # Slack
 
 Connect Homun to your Slack workspace. Homun supports two connection modes: **Socket Mode** (recommended, real-time, no public URL needed) and **HTTP polling** (fallback, no app-level token required). Both modes use the Slack Web API for sending messages.
@@ -13,7 +15,39 @@ Connect Homun to your Slack workspace. Homun supports two connection modes: **So
 
 ## Socket Mode vs HTTP Polling
 
-Homun supports two ways to receive messages from Slack:
+<Callout type="info">
+**Socket Mode** is the recommended approach. It uses a WebSocket connection from Homun to Slack's servers, meaning no public URL, no ngrok, no webhook endpoint is needed. Events arrive in real-time. The mode is selected automatically based on whether `app_token` is configured.
+</Callout>
+
+<Tabs items={['Socket Mode (Recommended)', 'HTTP Polling (Fallback)']}>
+  <Tabs.Tab>
+**Socket Mode** uses a WebSocket connection from Homun to Slack's servers.
+
+- Requires an app-level token (`xapp-*`)
+- No public URL needed
+- Real-time latency (sub-second)
+- Events delivered via push (WebSocket)
+- Recommended for all deployments
+
+```
+app_token present → Socket Mode
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+**HTTP Polling** is the fallback when no `app_token` is configured.
+
+- Does not require an app-level token
+- No public URL needed
+- ~3 second latency
+- Events delivered via pull (`conversations.history` API)
+- Higher API usage — polls every 3 seconds per channel
+- Use only for legacy or restricted setups
+
+```
+app_token empty → HTTP Polling
+```
+  </Tabs.Tab>
+</Tabs>
 
 | Feature | Socket Mode | HTTP Polling |
 |---|---|---|
@@ -23,27 +57,17 @@ Homun supports two ways to receive messages from Slack:
 | Events delivery | Push (WebSocket) | Pull (conversations.history API) |
 | Recommended for | All deployments | Legacy or restricted setups |
 
-**Socket Mode** is the recommended approach. It uses a WebSocket connection from Homun to Slack's servers, meaning no public URL, no ngrok, no webhook endpoint is needed. Events arrive in real-time.
-
-**HTTP Polling** is the fallback when no `app_token` is configured. Homun polls `conversations.history` every 3 seconds and auto-discovers all channels the bot is a member of. This is simpler to set up but has higher latency and uses more API calls.
-
-The mode is selected automatically based on whether `app_token` is configured:
-
-```
-app_token present → Socket Mode
-app_token empty   → HTTP Polling
-```
-
 ## Step-by-Step App Creation
 
-### 1. Create a Slack App
+<Steps>
+### Step 1: Create a Slack App
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
 2. Click **Create New App** > **From scratch**
 3. Name it (e.g., "Homun") and select your workspace
 4. Click **Create App**
 
-### 2. Enable Socket Mode
+### Step 2: Enable Socket Mode
 
 1. In the left sidebar, click **Socket Mode**
 2. Toggle **Enable Socket Mode** on
@@ -51,7 +75,7 @@ app_token empty   → HTTP Polling
 4. Click **Generate**
 5. Copy the **App Token** (starts with `xapp-`)
 
-### 3. Add Bot Token Scopes
+### Step 3: Add Bot Token Scopes
 
 1. Go to **OAuth & Permissions** in the sidebar
 2. Scroll to **Bot Token Scopes**
@@ -68,9 +92,11 @@ app_token empty   → HTTP Polling
 | `groups:history` | Read private channel history (optional) |
 | `groups:read` | List private channels (optional) |
 
+<Callout type="info">
 At minimum, you need `chat:write`, `app_mentions:read`, `im:history`, and `im:read`. Add `channels:*` scopes if you want the bot to work in public channels.
+</Callout>
 
-### 4. Enable Event Subscriptions
+### Step 4: Enable Event Subscriptions
 
 1. Go to **Event Subscriptions** in the sidebar
 2. Toggle **Enable Events** on
@@ -83,14 +109,14 @@ At minimum, you need `chat:write`, `app_mentions:read`, `im:history`, and `im:re
 
 4. Click **Save Changes**
 
-### 5. Install to Workspace
+### Step 5: Install to Workspace
 
 1. Go to **Install App** in the sidebar
 2. Click **Install to Workspace**
 3. Review the permissions and click **Allow**
 4. Copy the **Bot User OAuth Token** (starts with `xoxb-`)
 
-### 6. Configure Homun
+### Step 6: Configure Homun
 
 Add both tokens to `~/.homun/config.toml`:
 
@@ -100,7 +126,7 @@ token = "xoxb-your-bot-token"
 app_token = "xapp-your-app-token"
 ```
 
-### 7. Start the Gateway
+### Step 7: Start the Gateway
 
 ```bash
 homun gateway
@@ -112,6 +138,7 @@ You should see:
 INFO Slack starting in Socket Mode (real-time)
 INFO Slack Socket Mode: WebSocket connected
 ```
+</Steps>
 
 ## Configuration Reference
 
@@ -216,7 +243,9 @@ This preserves conversational context within threads. If a message is not in a t
 
 When the bot is @mentioned, the mention tag (`<@U_BOT_ID>`) is automatically stripped from the message. The agent sees clean text without the mention.
 
-If `mention_required = false`, the bot processes all messages in all channels it has access to — which can be noisy in active workspaces.
+<Callout type="warning">
+If `mention_required = false`, the bot processes **all messages** in all channels it has access to — which can be noisy in active workspaces. Use this setting only for dedicated bot channels.
+</Callout>
 
 ### Channel Auto-Discovery
 
@@ -273,9 +302,11 @@ When `pairing_required = true`, unknown senders receive a 6-digit OTP code in th
 
 ### Token Security
 
-- The **bot token** (`xoxb-*`) grants API access to your workspace. Keep it secret.
-- The **app token** (`xapp-*`) is used only for Socket Mode connections. It has limited scope (`connections:write` only).
-- Both tokens can be stored encrypted using Homun's vault: set the value to `***ENCRYPTED***` in config.toml and store the actual token via `homun vault set`.
+<Callout type="warning">
+Keep both tokens secret. The **bot token** (`xoxb-*`) grants API access to your workspace. The **app token** (`xapp-*`) is used only for Socket Mode connections with limited scope (`connections:write` only). Both can be stored encrypted using Homun's vault.
+</Callout>
+
+Both tokens can be stored encrypted using Homun's vault: set the value to `***ENCRYPTED***` in config.toml and store the actual token via `homun vault set`.
 
 ## Troubleshooting
 
@@ -314,7 +345,9 @@ This usually means the app token has expired or the WebSocket URL is stale. The 
 
 ### HTTP Polling mode: high API usage
 
+<Callout type="warning">
 In polling mode, Homun makes API calls every 3 seconds per channel, plus channel discovery every 60 seconds. For workspaces with many channels, this can consume significant API quota. Switch to Socket Mode to eliminate polling.
+</Callout>
 
 ## Tips and Best Practices
 

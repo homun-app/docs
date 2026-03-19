@@ -1,10 +1,22 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
 # Automations & Workflows
 
 Homun can run tasks on a schedule, respond to events automatically, and execute multi-step workflows with approval gates. This page covers cron jobs, the heartbeat scheduler, the visual automations builder, persistent workflows, and practical examples for each system.
 
 ## Three Automation Systems
 
-Homun provides three distinct automation systems, each designed for different use cases:
+<Tabs items={['Cron Jobs', 'Automations', 'Workflows']}>
+  <Tabs.Tab>
+    **Simple time-based recurring tasks.** Use cron jobs for straightforward scheduled tasks like "check emails every morning" or "send a weekly report on Friday." Standard cron expression syntax, full access to all tools, memory, and skills. Survives gateway restarts. Missed jobs during downtime are skipped (not retroactively run).
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Event-driven visual flows with conditions and branching.** Use automations for conditional logic like "if an email is urgent, alert me on Telegram; otherwise save a summary." Visual n8n-style flow builder in the Web UI with 11 node types: triggers, conditions, LLM calls, tools, messages. Supports NLP generation: describe what you want in plain language.
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Multi-step processes with approval gates and retry logic.** Use workflows for business processes that need human approval like "research, draft, review, publish." Persistent state in SQLite (survives restarts), approval gates that pause and wait for your confirmation, retry with exponential backoff (up to 5 retries), resume on boot from last completed step.
+  </Tabs.Tab>
+</Tabs>
 
 | System | Purpose | Complexity | Persistence |
 |--------|---------|:----------:|:-----------:|
@@ -12,23 +24,16 @@ Homun provides three distinct automation systems, each designed for different us
 | **Automations** | Event-driven visual flows with conditions and branching | Medium | Survives restarts |
 | **Workflows** | Multi-step processes with approval gates and retry logic | Advanced | Full persistence + resume |
 
-Use cron jobs for straightforward scheduled tasks ("check emails every morning"). Use automations for conditional logic ("if an email is urgent, alert me on Telegram; otherwise save a summary"). Use workflows for multi-step business processes that need human approval ("research, draft, review, publish").
-
 ## Cron Jobs
 
 Schedule recurring tasks using standard cron expressions. Cron jobs run inside the agent loop, meaning Homun has full access to all tools, memory, and skills when executing them.
 
 ### Adding a Cron Job
 
-```bash
-homun cron add "0 9 * * *" "Check my emails and summarize anything important"
-```
+<Steps>
+### Write the cron expression
 
-The first argument is the cron expression, the second is the natural language instruction. Homun interprets the instruction the same way it would a chat message -- it can use any available tool, activate skills, search memory, and browse the web.
-
-### Cron Expression Syntax
-
-Standard 5-field format: `minute hour day-of-month month day-of-week`
+Use standard 5-field format: `minute hour day-of-month month day-of-week`
 
 ```
  ┌─── minute (0-59)
@@ -39,6 +44,21 @@ Standard 5-field format: `minute hour day-of-month month day-of-week`
  │ │ │ │ │
  * * * * *
 ```
+
+### Add the cron job
+
+```bash
+homun cron add "0 9 * * *" "Check my emails and summarize anything important"
+```
+
+The first argument is the cron expression, the second is the natural language instruction.
+
+### Verify it was created
+
+```bash
+homun cron list
+```
+</Steps>
 
 ### Common Schedules
 
@@ -64,31 +84,15 @@ Standard 5-field format: `minute hour day-of-month month day-of-week`
 | `-` | Range | `1-5` = Monday through Friday |
 | `/` | Step | `*/10` = every 10 units |
 
-### Timezone Handling
-
-Cron expressions are evaluated in the server's **local timezone**, not UTC. If your server is set to `America/New_York`, `0 9 * * *` runs at 9:00 AM Eastern Time.
-
-To check your server's timezone:
-
-```bash
-date +%Z
-```
-
-If you need UTC scheduling, adjust the hour accordingly or set your server timezone to UTC.
-
-Keep in mind that daylight saving time transitions may cause jobs to run an hour early, an hour late, or twice on the transition day (depending on the timezone and direction of the change). For critical tasks, consider using UTC to avoid this.
+<Callout type="info">
+Cron expressions are evaluated in the server's **local timezone**, not UTC. If your server is set to `America/New_York`, `0 9 * * *` runs at 9:00 AM Eastern Time. Keep in mind that daylight saving time transitions may cause jobs to run an hour early or late.
+</Callout>
 
 ### Managing Cron Jobs
 
 ```bash
 # List all scheduled jobs with IDs and next run time
 homun cron list
-
-# Output:
-# ID  | Schedule          | Task                              | Next Run
-# 1   | 0 9 * * 1-5       | Check emails and summarize        | 2025-01-20 09:00
-# 2   | 30 8 * * 1        | Weekly calendar review            | 2025-01-20 08:30
-# 3   | 0 0 1 * *         | Monthly expense report            | 2025-02-01 00:00
 
 # Remove a job by ID
 homun cron remove 1
@@ -123,18 +127,6 @@ homun cron add "0 17 * * 5" "Review this week's git commits in ~/Projects/myapp.
 
 ```bash
 homun cron add "0 * * * *" "Fetch https://status.example.com and check if all services are operational. If anything is down, send me a Telegram alert."
-```
-
-**Database backup reminder** -- monthly:
-
-```bash
-homun cron add "0 10 1 * *" "Remind me to run the database backup for the production server."
-```
-
-**News digest** -- every morning, research and summarize:
-
-```bash
-homun cron add "0 7 * * *" "Search for the latest news about Rust programming language. Write a 5-bullet summary and send it to me on Telegram."
 ```
 
 **Price monitoring** -- every 6 hours:
@@ -182,6 +174,10 @@ Setting `interval_secs = 0` disables the heartbeat entirely.
 ## Visual Automations Builder
 
 The Web UI includes a visual flow builder for creating complex automations without writing code or cron expressions. Access it at **Automations** in the sidebar.
+
+<Callout type="info">
+Instead of building flows manually, you can describe what you want in plain language and Homun generates the complete automation flow using an LLM. The generated flow appears in the visual builder where you can review, edit, and adjust before activating.
+</Callout>
 
 ### How It Works
 
@@ -233,16 +229,6 @@ The inspector panel uses guided inputs, not free text. When you configure a tool
 - Model dropdowns show your configured LLM providers
 
 This approach prevents typos and invalid configurations.
-
-### NLP Flow Generation
-
-Instead of building flows manually, describe what you want in plain language:
-
-> "Every morning at 9 AM, check my emails. If there's anything urgent, send me a Telegram message. Otherwise, save a summary to my knowledge base."
-
-Homun generates the complete automation flow using an LLM. The generated flow appears in the visual builder where you can review, edit, and adjust before activating.
-
-The NLP generator creates proper nodes with the right connections, but you should always review the result. Complex automations may need manual adjustment.
 
 ### Automation States
 
@@ -343,10 +329,6 @@ When you approve, the workflow continues from the next step. When you reject, th
 
 The next step receives your feedback as additional context.
 
-### Approval Timeout
-
-If an approval is not responded to within a configurable timeout, the workflow remains in `waiting_approval` state. It does not auto-approve or auto-reject. The heartbeat can be configured to send reminders about pending approvals.
-
 ### Retry Logic
 
 When a step fails (tool error, LLM timeout, network issue), the workflow retries with exponential backoff:
@@ -406,33 +388,6 @@ A cron job that creates a weekly summary:
 homun cron add "0 18 * * 5" "Review everything we discussed this week. Write a concise weekly digest covering: decisions made, action items, and topics to follow up on. Save it to ~/Documents/weekly-digests/"
 ```
 
-### Example 5: Customer Inquiry Workflow
-
-A workflow for handling incoming customer inquiries:
-
-1. **Classify**: LLM reads the inquiry and categorizes it (support, sales, partnership)
-2. **Research**: search knowledge base for relevant documentation
-3. **Draft response**: write a reply using the knowledge base context
-4. **Approval gate**: show the draft for your review
-5. **Send**: forward the approved response via email
-
-## Configuration Reference
-
-### Cron Settings
-
-Cron jobs are managed via CLI and Web UI. There is no global configuration section -- each job has its own schedule and instruction.
-
-### Heartbeat Settings
-
-```toml
-[heartbeat]
-interval_secs = 3600    # Wake-up interval in seconds (default: 3600 = 1 hour)
-```
-
-### Automation Settings
-
-Automations are configured in the Web UI visual builder. They are stored in the SQLite database.
-
 ## Troubleshooting
 
 ### Cron Job Not Firing
@@ -455,9 +410,9 @@ Automations are configured in the Web UI visual builder. They are stored in the 
 
 ### Workflow Approval Timeout
 
-**Symptom**: a workflow has been in `waiting_approval` for a long time and nobody noticed.
-
-**Fix**: configure the heartbeat to check for pending approvals. Ensure at least one notification channel is active (Telegram, Discord, etc.) so approval requests reach you.
+<Callout type="warning">
+If a workflow has been in `waiting_approval` for a long time and nobody noticed, configure the heartbeat to check for pending approvals. Ensure at least one notification channel is active (Telegram, Discord, etc.) so approval requests reach you.
+</Callout>
 
 ### Missed Cron Jobs During Downtime
 

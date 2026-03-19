@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # CLI
 
 The CLI channel lets you interact with Homun directly from your terminal. Unlike other channels, the CLI does not require the gateway — it connects directly to the configured LLM provider for a lightweight, local-first experience.
@@ -11,7 +13,11 @@ Homun's CLI supports three modes: **interactive** (REPL), **one-shot** (single m
 
 That is it. No gateway, no tokens, no setup wizard.
 
-## Interactive Mode (REPL)
+## Usage Modes
+
+<Tabs items={['Interactive (REPL)', 'One-Shot', 'TUI']}>
+  <Tabs.Tab>
+### Interactive Mode
 
 Start an interactive session:
 
@@ -47,7 +53,7 @@ homun> Here are the files in the current directory:
 ...
 ```
 
-### REPL Commands
+#### REPL Commands
 
 | Command | Action |
 |---|---|
@@ -58,13 +64,14 @@ homun> Here are the files in the current directory:
 | `Ctrl+C` | Exit |
 | `Ctrl+D` | Exit (EOF) |
 
-### Session Memory
+#### Session Memory
 
 Within an interactive session, the agent maintains full conversation context. Each message builds on the previous ones. Use `/new` to clear the session and start fresh without exiting.
 
 Sessions are stored in the database under the key `cli:default`. This means your CLI conversation history persists across sessions if you restart `homun chat`.
-
-## One-Shot Mode
+  </Tabs.Tab>
+  <Tabs.Tab>
+### One-Shot Mode
 
 Send a single message and get the response:
 
@@ -74,11 +81,11 @@ homun chat -m "What's the capital of Japan?"
 
 The agent processes the message, prints the response, and the process exits. This is ideal for scripting, automation, and piping.
 
-### Exit Code
+#### Exit Code
 
 The process exits with code 0 on success. If the agent encounters an error (e.g., LLM provider unreachable), it exits with a non-zero code.
 
-## Scripting and Piping
+#### Scripting and Piping
 
 One-shot mode works with standard Unix piping and redirection:
 
@@ -107,11 +114,12 @@ SUMMARY=$(cat "$1" | homun chat -m "Summarize this in one sentence")
 echo "Summary: $SUMMARY"
 ```
 
-### Using with stdin
-
+<Callout type="info">
 When you pipe content to `homun chat -m`, the piped content is prepended to the message. The agent sees both the piped content and the message text.
-
-## TUI Mode
+</Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
+### TUI Mode
 
 For a richer terminal experience, Homun includes a TUI (Terminal User Interface) built with [ratatui](https://ratatui.rs/):
 
@@ -126,7 +134,7 @@ The TUI provides:
 - Status bar showing connection state, model, and session info
 - Keyboard navigation
 
-### TUI Key Bindings
+#### TUI Key Bindings
 
 | Key | Action |
 |---|---|
@@ -134,6 +142,8 @@ The TUI provides:
 | `Up/Down` | Scroll history |
 | `Ctrl+C` | Exit |
 | `Esc` | Exit |
+  </Tabs.Tab>
+</Tabs>
 
 ## Configuration
 
@@ -149,7 +159,9 @@ api_key = "sk-ant-..."
 
 ### Using Local Models
 
-For fully offline operation, configure Ollama:
+<Callout type="info">
+For fully offline operation, configure Ollama. Run Ollama separately (`ollama serve`) and use the CLI without any internet connection. Your data never leaves your machine.
+</Callout>
 
 ```toml
 [provider]
@@ -158,8 +170,6 @@ default_model = "ollama/llama3.2"
 [provider.ollama]
 host = "http://localhost:11434"
 ```
-
-Then run Ollama separately (`ollama serve`) and use the CLI without any internet connection.
 
 ### Model Override
 
@@ -244,6 +254,10 @@ git log --oneline -10 | homun chat -m "What has changed recently?"
 git diff main..feature | homun chat -m "Review this diff for issues"
 ```
 
+<Callout type="info">
+Set up a shell alias for quick access: `alias h="homun chat -m"` so you can type `h "What time is it?"`. Add it to your `.bashrc` or `.zshrc` to make it permanent.
+</Callout>
+
 ## Troubleshooting
 
 ### "Failed to connect to Anthropic API"
@@ -260,7 +274,9 @@ git diff main..feature | homun chat -m "Review this diff for issues"
 
 ### Piped content not included in message
 
-Make sure you are using `-m` flag: `cat file.txt | homun chat -m "Summarize this"`. Without `-m`, the CLI enters interactive mode and ignores stdin.
+<Callout type="warning">
+Make sure you are using the `-m` flag: `cat file.txt | homun chat -m "Summarize this"`. Without `-m`, the CLI enters interactive mode and ignores stdin.
+</Callout>
 
 ### Session state not cleared between runs
 

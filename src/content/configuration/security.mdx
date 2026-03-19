@@ -1,3 +1,5 @@
+import { Callout, Steps } from 'nextra/components'
+
 # Security
 
 Homun includes multiple layers of security: password-based authentication with strong hashing, rate limiting, API key management, an encrypted vault for secrets, two-factor authentication, an emergency stop mechanism, and an exfiltration guard that prevents sensitive data from leaking through LLM responses.
@@ -119,14 +121,14 @@ Every API response includes rate limit headers:
 
 ### Behind a Reverse Proxy
 
-When Homun is behind a reverse proxy (Nginx, Caddy), all requests appear to come from the proxy's IP. Enable `trust_x_forwarded_for` so rate limiting uses the real client IP:
+<Callout type="warning">
+When Homun is behind a reverse proxy (Nginx, Caddy), all requests appear to come from the proxy's IP. Enable `trust_x_forwarded_for` so rate limiting uses the real client IP. Only enable this when Homun is behind a trusted proxy. If Homun is directly exposed to the internet, a malicious client could forge the `X-Forwarded-For` header to bypass rate limits.
+</Callout>
 
 ```toml
 [channels.web]
 trust_x_forwarded_for = true
 ```
-
-**Warning**: Only enable this when Homun is behind a trusted proxy. If Homun is directly exposed to the internet, a malicious client could forge the `X-Forwarded-For` header to bypass rate limits.
 
 ## API Keys
 
@@ -204,7 +206,9 @@ Revoked keys are immediately invalid. Any in-flight requests using the key will 
 
 ## Encrypted Vault
 
-The vault provides encrypted storage for secrets (API keys, tokens, passwords) that Homun, its skills, and automations can reference by name without exposing the actual values.
+<Callout type="warning">
+The vault provides encrypted storage for secrets (API keys, tokens, passwords). The `secrets.enc` file is useless without the master key stored in your OS keychain. If you copy the file to another machine, the secrets cannot be decrypted. Secrets are zeroized from RAM when no longer needed.
+</Callout>
 
 ### Encryption Details
 
@@ -221,8 +225,6 @@ The master encryption key is generated on first use and stored in your OS keycha
 - On **macOS**: the key is in Keychain Access, protected by your login password and (optionally) Touch ID
 - On **Linux**: the key is in the Secret Service (GNOME Keyring or KDE Wallet)
 - On **Windows**: the key is in Windows Credential Manager
-
-The `secrets.enc` file is useless without the master key from the OS keychain. If you copy the file to another machine, the secrets cannot be decrypted.
 
 ### CLI Commands
 
@@ -296,16 +298,23 @@ Add an extra layer of security to web login with time-based one-time passwords (
 
 ### Enabling 2FA
 
-1. Go to **Account > Security** in the Web UI
-2. Click **Enable 2FA**
-3. A QR code is displayed -- scan it with your authenticator app:
-   - Google Authenticator
-   - Authy
-   - 1Password
-   - Bitwarden
-   - Any TOTP-compatible app
-4. Enter the 6-digit code from your app to confirm setup
-5. Save the backup codes shown on screen -- store them securely
+<Steps>
+### Go to Account Security
+
+Navigate to **Account > Security** in the Web UI and click **Enable 2FA**.
+
+### Scan the QR Code
+
+A QR code is displayed -- scan it with your authenticator app (Google Authenticator, Authy, 1Password, Bitwarden, or any TOTP-compatible app).
+
+### Enter the Verification Code
+
+Enter the 6-digit code from your app to confirm setup.
+
+### Save Backup Codes
+
+Save the backup codes shown on screen -- store them securely. Each code can be used once in place of a TOTP code if you lose access to your authenticator app.
+</Steps>
 
 ### Login Flow with 2FA
 
@@ -342,7 +351,9 @@ API key authentication bypasses 2FA. Keys are already a "something you have" fac
 
 ## Emergency Stop (E-Stop)
 
-The emergency stop is a kill switch that immediately halts all running operations. Use it when Homun is doing something you did not intend and you need everything to stop immediately.
+<Callout type="error">
+The emergency stop is a kill switch that immediately halts all running operations. Use it when Homun is doing something you did not intend and you need everything to stop immediately. E-Stop does not delete data or corrupt state -- it is a safe operation.
+</Callout>
 
 ### What E-Stop Kills
 
@@ -386,8 +397,6 @@ After triggering an E-Stop:
 4. Paused workflows can be resumed from their last completed step
 5. Browser sessions must be restarted manually if needed
 
-E-Stop does not delete data or corrupt state. It is a safe operation. You can trigger it as often as needed without risk.
-
 ### E-Stop vs Ctrl+C vs `homun stop`
 
 | Action | What It Does |
@@ -400,6 +409,10 @@ E-Stop does not delete data or corrupt state. It is a safe operation. You can tr
 ## Exfiltration Guard
 
 The exfiltration guard is a passive security system that scans tool results and LLM outputs for sensitive data patterns. It prevents accidental data leaks where the LLM might include API keys, passwords, or tokens in its responses.
+
+<Callout type="info">
+The exfiltration guard is always enabled and cannot be disabled. This is by design -- it is a safety net, not a configurable feature. Even if you trust every tool and data source, the guard protects against unexpected leaks.
+</Callout>
 
 ### What It Detects
 
@@ -428,10 +441,6 @@ The exfiltration guard runs on:
 - Web page content fetched by the browser
 - MCP tool results
 - Email content
-
-### Configuration
-
-The exfiltration guard is always enabled and cannot be disabled. This is by design -- it is a safety net, not a configurable feature. Even if you trust every tool and data source, the guard protects against unexpected leaks (e.g., a config file containing an API key that the agent reads).
 
 ## DM Pairing (Channel Security)
 
@@ -481,15 +490,15 @@ For production deployments or to avoid browser warnings, use a reverse proxy wit
 
 ### Binding Address
 
-By default, Homun binds to `127.0.0.1` (localhost only). This means it is not accessible from other machines on your network. For remote access, use a reverse proxy or SSH tunnel rather than changing the bind address:
+<Callout type="warning">
+By default, Homun binds to `127.0.0.1` (localhost only). Changing `host` to `0.0.0.0` exposes Homun directly to your network. This is not recommended. Always use a reverse proxy for remote access to benefit from proper TLS, rate limiting, and access control at the network edge.
+</Callout>
 
 ```toml
 [channels.web]
 host = "127.0.0.1"    # Keep this as localhost
 port = 18443
 ```
-
-**Security note**: Changing `host` to `0.0.0.0` exposes Homun directly to your network. This is not recommended. Always use a reverse proxy for remote access to benefit from proper TLS, rate limiting, and access control at the network edge.
 
 ## Security Hardening Checklist
 

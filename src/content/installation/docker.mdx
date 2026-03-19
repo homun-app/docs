@@ -1,3 +1,5 @@
+import { Callout, Steps } from 'nextra/components'
+
 # Docker
 
 The fastest way to get Homun running. Docker Compose handles the build, database, and networking for you.
@@ -9,14 +11,15 @@ The fastest way to get Homun running. Docker Compose handles the build, database
 
 ## Quick Start
 
-1. **Clone the repository**
+<Steps>
+### Clone the repository
 
 ```bash
 git clone https://github.com/homunbot/homunbot.git
 cd homunbot
 ```
 
-2. **Create your environment file**
+### Create your environment file
 
 ```bash
 cp .env.example .env
@@ -30,25 +33,30 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ```
 
-3. **Start Homun**
+<Callout type="warning">
+The `.env` file contains sensitive API keys. Do not commit it to version control. The `.gitignore` file already excludes it, but verify this if you are working in a fork.
+</Callout>
+
+### Start Homun
 
 ```bash
 docker compose up -d
 ```
 
-4. **Open the Web UI**
+### Open the Web UI
 
 Navigate to [https://localhost](https://localhost) and complete the setup wizard. You will create your admin password and configure your first LLM provider.
+</Steps>
 
 ## Local Embeddings with Ollama
 
-If you want to run embeddings locally instead of using OpenAI, start Homun with the Ollama profile:
+<Callout type="info">
+If you want to run embeddings locally instead of using OpenAI, start Homun with the Ollama profile. This starts an Ollama container alongside Homun. The setup wizard will detect it automatically.
+</Callout>
 
 ```bash
 docker compose --profile with-ollama up -d
 ```
-
-This starts an Ollama container alongside Homun. The setup wizard will detect it automatically.
 
 ## Environment Variables
 
@@ -72,7 +80,9 @@ git pull
 docker compose up -d --build
 ```
 
+<Callout type="info">
 Your data (database, config, memory) persists in a Docker volume and is not affected by updates.
+</Callout>
 
 ## Stopping
 

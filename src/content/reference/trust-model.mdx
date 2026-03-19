@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Trust Model
 
 Homun operates with a layered trust model that defines who can interact with the system, how they authenticate, what they can access, and how data flows through the system. This page documents every security boundary, isolation mechanism, and data flow decision.
@@ -9,6 +11,10 @@ Homun's security model follows three core principles:
 1. **Local-first**: Your data stays on your machine unless you explicitly configure an LLM provider or external service. There is no cloud account, no telemetry, no phoning home.
 2. **Defense in depth**: Multiple independent security layers mean that a failure in one layer does not compromise the whole system.
 3. **Fail closed**: When in doubt, Homun denies access. Unknown senders are blocked. Unrecognized devices require approval. Missing permissions reject the request.
+
+<Callout type="warning">
+Homun follows a "fail closed" security model. Unknown senders are blocked, unrecognized devices require approval, and missing permissions reject the request. Every piece of content that enters the agent loop has a trust level that determines how it is handled.
+</Callout>
 
 ## Principals
 
@@ -50,12 +56,6 @@ What lives in the trusted zone:
 
 Web sessions, API tokens, and paired channel senders. Identity is verified, and permissions are scoped. Authenticated users can interact with Homun through defined interfaces but cannot bypass the security controls.
 
-What lives in the authenticated zone:
-- Web UI sessions (password + optional 2FA)
-- API key requests (scoped by role)
-- Paired channel users (verified via OTP)
-- Webhook callers (token-authenticated)
-
 ### Untrusted Zone
 
 Webhook payloads, browser page content, MCP tool results, and messages from unknown senders. All content from this zone is:
@@ -65,17 +65,7 @@ Webhook payloads, browser page content, MCP tool results, and messages from unkn
 - Never executed as commands without verification
 - Subject to exfiltration guard scanning
 
-What lives in the untrusted zone:
-- Messages from unknown (unpaired) senders
-- Web page content fetched by the browser tool
-- MCP service responses
-- Webhook payloads from external systems
-- Email content from unknown senders
-- RAG document content (sensitive data vault-gated)
-
 ## Content Trust Levels
-
-Every piece of content that enters the agent loop has a trust level that determines how it is handled:
 
 | Source | Trust Level | How It Is Handled |
 |--------|------------|-------------------|
@@ -92,7 +82,9 @@ Every piece of content that enters the agent loop has a trust level that determi
 
 ## Approval System
 
-For sensitive actions, Homun pauses and asks for your explicit confirmation before proceeding. This prevents the agent from taking destructive or irreversible actions without your knowledge.
+<Callout type="info">
+For sensitive actions, Homun pauses and asks for your explicit confirmation before proceeding. Approval requests are delivered through the Web UI, messaging channels, and API. Pending approvals expire after a configurable timeout (default: 24 hours) and are treated as rejected.
+</Callout>
 
 ### Actions That Require Approval
 
@@ -110,10 +102,6 @@ For sensitive actions, Homun pauses and asks for your explicit confirmation befo
 3. You receive a notification (Web UI, configured channel, or CLI)
 4. You review the action details and approve or reject
 5. If approved, the action executes; if rejected, the agent is informed
-
-### Approval Timeout
-
-Pending approvals expire after a configurable timeout (default: 24 hours). Expired approvals are treated as rejected. The agent is notified and can suggest an alternative approach.
 
 ### Approval Channels
 
@@ -148,13 +136,6 @@ Homun auto-detects the best available sandbox backend:
 | Bubblewrap | Linux | Medium (namespace isolation) |
 | Windows Job Objects | Windows | Medium (resource limits) |
 
-### What the Sandbox Restricts
-
-- **Filesystem**: Read-only access to most paths; write access only to a temporary directory
-- **Network**: Blocked by default (configurable)
-- **Execution time**: Timeout after 30 seconds (configurable)
-- **Process limits**: Cannot fork-bomb or exhaust system resources
-
 ## Data Flow
 
 Understanding where your data goes is critical for privacy. Here is every data path in Homun:
@@ -185,7 +166,9 @@ Understanding where your data goes is critical for privacy. Here is every data p
 
 ### Using Ollama (Zero Data Leakage)
 
-When using Ollama as your LLM provider, **no data leaves your machine at all**. The LLM runs locally, and all processing happens on your hardware. This is the maximum privacy configuration:
+<Callout type="info">
+When using Ollama as your LLM provider, **no data leaves your machine at all**. The LLM runs locally, and all processing happens on your hardware. With this configuration and no web search tools configured, Homun operates entirely offline.
+</Callout>
 
 ```toml
 [providers]
@@ -195,11 +178,7 @@ default = "ollama/llama3"
 base_url = "http://localhost:11434"
 ```
 
-With this configuration and no web search tools configured, Homun operates entirely offline.
-
 ## Vault Protection
-
-The vault isolates secrets from the LLM and from accidental exposure:
 
 ### Vault-to-LLM Barrier
 
@@ -219,23 +198,13 @@ Even with the above barrier, there are edge cases where secrets might appear in 
 2. If any vault secret value is found in the text, it is replaced with `[REDACTED:secret_name]`
 3. A warning is logged (at `warn` level)
 
-This is a defense-in-depth measure. The primary protection is that secrets are never exposed to the LLM context in the first place.
-
 ## Exfiltration Guard
 
-The exfiltration guard is a broader security layer that detects sensitive data patterns in all outbound content, not just vault secrets. It catches:
+<Callout type="warning">
+The exfiltration guard is always enabled and cannot be disabled. It detects sensitive data patterns (API keys, tokens, passwords, private keys, connection strings, AWS credentials) in all tool results before they reach the LLM. Detected patterns are replaced with `[REDACTED]`.
+</Callout>
 
-- API keys (various provider formats)
-- Bearer and OAuth tokens
-- JWT tokens
-- Password patterns
-- PEM-encoded private keys
-- SSH private keys
-- Database connection strings with credentials
-- AWS access keys and secret keys
-- High-entropy strings that look like secrets
-
-The guard runs on all tool results before they reach the LLM. Detected patterns are replaced with `[REDACTED]` and a warning is logged. The guard is always enabled and cannot be disabled.
+The guard runs on all tool results before they reach the LLM.
 
 ## Network Access
 
@@ -260,58 +229,6 @@ The guard runs on all tool results before they reach the LLM. Detected patterns 
 | No other ports | -- | -- |
 
 Homun only listens on one port. All messaging channels use outbound connections (long polling, WebSocket to the platform's servers). There are no additional inbound ports.
-
-## File System Access
-
-### What Homun Reads
-
-| Path | Purpose | Access |
-|------|---------|--------|
-| `~/.homun/` | Data directory | Read/Write |
-| Working directory | Skill scripts | Read |
-| `knowledge.watch_dirs` | Auto-ingest documents | Read |
-| Any path via `file` tool | Agent reads files you ask about | Read (sandboxed) |
-
-### What Homun Writes
-
-| Path | Purpose |
-|------|---------|
-| `~/.homun/config.toml` | Configuration changes |
-| `~/.homun/homun.db` | Database (sessions, memories, etc.) |
-| `~/.homun/secrets.enc` | Vault updates |
-| `~/.homun/brain/*.md` | Memory updates (via remember tool) |
-| `~/.homun/memory/*.md` | Daily memory files |
-| `~/.homun/tls/` | Auto-generated TLS certificates |
-| `~/.homun/logs/` | Log files |
-| `~/.homun/skills/` | Installed skills |
-
-The agent can also write files via the `file` tool, but only to paths the user explicitly requests. File writes through tools are logged.
-
-## Browser Isolation
-
-Browser automation runs through a separate MCP Playwright process:
-
-- The browser process is a child of the `npx @playwright/mcp` command, not part of the Homun binary
-- Each browser session has its own user data directory
-- Stealth injection prevents basic bot detection but does not bypass sophisticated anti-bot systems
-- Browser page content is treated as untrusted (low trust level)
-- The exfiltration guard scans all content extracted from web pages
-
-Browser sessions are destroyed on E-Stop and can be closed individually.
-
-## Comparison with Other AI Assistants
-
-| Feature | Homun | Cloud AI Assistants | ChatGPT/Claude Web |
-|---------|:-----:|:-------------------:|:------------------:|
-| Data stored locally | Yes | No | No |
-| Choose your LLM | Yes | No | No |
-| Fully offline option | Yes (Ollama) | No | No |
-| Open source | Yes | Varies | No |
-| Encrypted vault | Yes | Varies | No |
-| Self-hosted | Yes | Sometimes | No |
-| No telemetry | Yes | Varies | No |
-| Tool use sandboxed | Yes | Varies | Varies |
-| Emergency stop | Yes | No | No |
 
 ## Security Controls Summary
 

@@ -1,3 +1,5 @@
+import { Callout, FileTree } from 'nextra/components'
+
 # Configuration
 
 Homun stores all its settings in a single TOML file. This page covers the file location, the full data directory structure, every method of editing configuration, hot-reload behavior, environment variable overrides, and a complete annotated example.
@@ -31,7 +33,9 @@ list = ["one", "two", "three"]
 deep_key = "deep_value"
 ```
 
+<Callout type="warning">
 Homun validates the config file on startup. If a section or key is malformed, Homun logs the error and exits with a descriptive message pointing to the invalid line. It never silently ignores invalid configuration.
+</Callout>
 
 ## Config Sections Overview
 
@@ -61,42 +65,47 @@ The only truly required setting is `providers.default` -- without a default mode
 
 Beyond the config file, Homun stores all its runtime data in the `~/.homun/` directory. Here is the full structure:
 
-```
-~/.homun/
-  config.toml            # Main configuration file
-  homun.db               # SQLite database (sessions, memories, cron, workflows)
-  homun.db-shm           # SQLite shared memory (auto-managed)
-  homun.db-wal           # SQLite write-ahead log (auto-managed)
-  secrets.enc            # Encrypted vault file (AES-256-GCM)
+<FileTree>
+  <FileTree.Folder name="~/.homun/" defaultOpen>
+    <FileTree.File name="config.toml" />
+    <FileTree.File name="homun.db" />
+    <FileTree.File name="homun.db-shm" />
+    <FileTree.File name="homun.db-wal" />
+    <FileTree.File name="secrets.enc" />
+    <FileTree.Folder name="brain" defaultOpen>
+      <FileTree.File name="USER.md" />
+      <FileTree.File name="INSTRUCTIONS.md" />
+      <FileTree.File name="SOUL.md" />
+    </FileTree.Folder>
+    <FileTree.Folder name="memory">
+      <FileTree.File name="2025-01-15.md" />
+      <FileTree.File name="2025-01-16.md" />
+    </FileTree.Folder>
+    <FileTree.Folder name="skills">
+      <FileTree.Folder name="weather">
+        <FileTree.File name="SKILL.md" />
+        <FileTree.Folder name="scripts">
+          <FileTree.File name="fetch.py" />
+        </FileTree.Folder>
+      </FileTree.Folder>
+      <FileTree.Folder name="summarizer">
+        <FileTree.File name="SKILL.md" />
+      </FileTree.Folder>
+    </FileTree.Folder>
+    <FileTree.Folder name="logs">
+      <FileTree.File name="homun.log" />
+    </FileTree.Folder>
+    <FileTree.Folder name="tls">
+      <FileTree.File name="cert.pem" />
+      <FileTree.File name="key.pem" />
+    </FileTree.Folder>
+    <FileTree.Folder name="mcp" />
+  </FileTree.Folder>
+</FileTree>
 
-  brain/
-    USER.md              # User profile — updated only by the "remember" tool
-    INSTRUCTIONS.md      # Learned behavioral instructions (LLM consolidation)
-    SOUL.md              # Agent personality definition (user-editable)
-
-  memory/
-    2025-01-15.md         # Daily memory files (one per day)
-    2025-01-16.md
-
-  skills/                 # User-installed skills (one subdirectory per skill)
-    weather/
-      SKILL.md
-      scripts/
-        fetch.py
-    summarizer/
-      SKILL.md
-
-  logs/                   # Log files (when file logging is enabled)
-    homun.log
-
-  tls/                    # Auto-generated TLS certificates for HTTPS
-    cert.pem
-    key.pem
-
-  mcp/                    # MCP server configurations and state
-```
-
-**Important**: Do not manually edit `homun.db` or `secrets.enc`. Use the CLI, API, or Web UI for all data operations. Editing the database directly can corrupt your data. The `brain/` files and `config.toml` are safe to edit manually.
+<Callout type="warning">
+Do not manually edit `homun.db` or `secrets.enc`. Use the CLI, API, or Web UI for all data operations. Editing the database directly can corrupt your data. The `brain/` files and `config.toml` are safe to edit manually.
+</Callout>
 
 ### Key Files Explained
 
@@ -196,7 +205,9 @@ This is the recommended approach for initial setup on headless servers where the
 
 ## Hot-Reload Behavior
 
-Some settings take effect immediately while the gateway is running. Others require a full restart. The table below lists every configuration section and its reload behavior.
+<Callout type="info">
+Some settings take effect immediately while the gateway is running. Others require a full restart. Provider settings, general settings, and sandbox settings hot-reload. Channel settings and security settings require a gateway restart.
+</Callout>
 
 | Section | Setting | Hot Reload | Notes |
 |---------|---------|:----------:|-------|
@@ -273,7 +284,11 @@ These environment variables are not config overrides but control Homun's behavio
 
 ## Config Validation
 
-Homun validates the configuration file at startup and when settings are changed via CLI or API. Validation checks include:
+<Callout type="warning">
+Homun validates the configuration file at startup and when settings are changed via CLI or API. If validation fails, Homun prints a clear error message and exits with a non-zero status code. It never starts with an invalid configuration.
+</Callout>
+
+Validation checks include:
 
 - **TOML syntax**: the file must be valid TOML. Errors show the line number and character position.
 - **Type checking**: values must match expected types (string, integer, boolean, array).
@@ -283,8 +298,6 @@ Homun validates the configuration file at startup and when settings are changed 
 - **File paths**: paths like `knowledge.watch_dirs` entries must be accessible directories.
 - **Model format**: the `providers.default` value must contain a `/` separator (e.g., `anthropic/claude-sonnet-4-5-20250514`).
 - **Cron expressions**: scheduler cron strings must be valid 5-field cron format.
-
-When validation fails, Homun prints a clear error message and exits with a non-zero status code. It never starts with an invalid configuration.
 
 ```
 Error: invalid config at channels.web.port: expected integer, got string "abc"
@@ -303,7 +316,9 @@ Error: invalid config at channels.web.port: expected integer, got string "abc"
 
 ## Full Example Config
 
-Below is a complete `config.toml` with all sections and their most common options. Uncomment and modify the sections you need.
+<Callout type="info">
+Below is a complete `config.toml` with all sections. Uncomment and modify the sections you need. The only required setting is `providers.default`.
+</Callout>
 
 ```toml
 # ── General ─────────────────────────────────────────────

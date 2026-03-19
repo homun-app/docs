@@ -1,0 +1,167 @@
+import { Callout, Steps } from 'nextra/components'
+
+# Setup Wizard
+
+The setup wizard runs automatically when you access the Web UI for the first time. It walks you through the essential configuration to get Homun up and running in four phases: create an account, configure an LLM provider, set your preferences, and verify everything works with a test chat.
+
+## When the Wizard Appears
+
+The setup wizard appears when:
+- You visit the Web UI for the first time (no admin account exists)
+- The database has been reset or is new
+- You navigate directly to the setup wizard URL
+
+If an admin account already exists, the wizard redirects to the login page instead.
+
+## Setup Phases
+
+<Steps>
+### Phase 1: Create Admin Account
+
+Create your admin account to protect access to the Web UI and all API endpoints.
+
+**Username**: Choose a username for logging in (at least 3 characters, letters, numbers, and underscores).
+
+**Password**: Choose a strong password (at least 8 characters, one uppercase, one lowercase, one number). The password is hashed with PBKDF2 using 600,000 iterations before storage.
+
+Homun supports one admin account. There is no multi-user system. All channels, tools, and configurations are tied to this single account.
+
+After account creation:
+- A session cookie is created and you are automatically logged in
+- Rate limiting activates for the login endpoint (5 attempts per minute per IP)
+- All API endpoints become protected
+
+### Phase 2: Configure LLM Provider
+
+Connect Homun to an LLM provider. This is required -- without an LLM, Homun cannot process messages or use tools.
+
+Choose from the supported providers:
+
+| Provider | Models | API Key Required | Notes |
+|----------|--------|:----------------:|-------|
+| **Anthropic** | Claude Opus, Sonnet, Haiku | Yes | Recommended. Best tool use support. |
+| **OpenAI** | GPT-4o, GPT-4o-mini, o1, o3 | Yes | Widely available, strong general performance. |
+| **Ollama** | Llama, Mistral, Qwen, etc. | No | Free, runs locally. No API key needed. |
+| **OpenRouter** | 100+ models | Yes | Access many providers with one key. |
+| **DeepSeek** | DeepSeek-V3, DeepSeek-R1 | Yes | Strong reasoning, competitive pricing. |
+| **Groq** | Llama, Mixtral (fast inference) | Yes | Very fast, good for latency-sensitive tasks. |
+
+Enter your API key and select a default model. The wizard validates the key by making a test call to the provider's API. The API key is stored encrypted in the vault.
+
+<Callout type="info">
+If you choose Ollama (local LLM), the wizard checks whether Ollama is installed, the service is running, and which models are available. If no models are downloaded, it suggests popular options and can pull them for you.
+</Callout>
+
+### Phase 3: Theme and Preferences
+
+Customize your experience. All settings here are optional and can be changed later.
+
+- **Theme**: Dark mode (default), Light mode, or System (follows OS preference)
+- **Accent Color**: Pick a color for buttons, links, highlights, and active states
+- **Language**: Set the default language for Homun's responses
+- **Agent Personality** (optional): Write a few lines describing how you want Homun to communicate (saved to `~/.homun/brain/SOUL.md`)
+
+### Phase 4: Test Chat
+
+Verify everything works end-to-end by opening a live chat session directly in the wizard.
+
+1. A WebSocket connection is established to the gateway
+2. You type a test message (the wizard suggests one, or you can type your own)
+3. The message is sent through the full agent pipeline: LLM processes it, tools are available, memory is active
+4. The response streams back in real-time, token by token
+5. The wizard confirms success
+
+This tests WebSocket connectivity, LLM provider connection, streaming response rendering, tool availability, and the full message pipeline.
+</Steps>
+
+### If the Test Fails
+
+The wizard diagnoses common issues:
+
+| Problem | Diagnosis | Suggested Fix |
+|---------|-----------|---------------|
+| No response | LLM provider unreachable | Check API key, network, provider status |
+| Timeout | Request took too long | Try a faster model, check network latency |
+| Error message | Provider returned an error | Read the error, fix API key or model name |
+| WebSocket disconnected | Connection dropped | Check gateway logs, try refreshing the page |
+
+You can retry the test as many times as needed. Once you get a successful response, click **Complete Setup** to finish.
+
+## After the Wizard
+
+Once the wizard completes, you are taken to the Dashboard. From here, you can:
+
+1. **Start chatting**: go to **Chat** and start a conversation
+2. **Add channels**: go to **Channels** to connect Telegram, Discord, Slack, WhatsApp, or Email
+3. **Import knowledge**: go to **Knowledge** to upload documents for the RAG knowledge base
+4. **Install skills**: go to **Skills** to browse and install skills from the marketplace
+5. **Set up automations**: go to **Automations** to schedule recurring tasks
+6. **Configure security**: go to **Vault** to store API keys, go to **Account** for 2FA setup
+
+### Recommended First Steps
+
+1. **Add at least one messaging channel** (Telegram is the easiest to set up) so Homun can reach you proactively
+2. **Tell Homun about yourself**: "Remember that I'm a developer working on project X" -- this seeds the user profile
+3. **Store any API keys** you want skills to use in the Vault
+4. **Set up a morning briefing** cron job to see automations in action
+
+## Re-Running the Wizard
+
+<Callout type="info">
+The full wizard runs only once (on first access). After that, you can change any setting individually: LLM provider in Settings > Providers, theme in Account > Appearance, password in Account > Security, agent personality in Memory > SOUL.md. There is no need to re-run the full wizard.
+</Callout>
+
+### Resetting Everything
+
+If you want to start fresh (new account, new config):
+
+1. Stop the gateway
+2. Delete the database: `rm ~/.homun/homun.db`
+3. Optionally delete the config: `rm ~/.homun/config.toml`
+4. Start the gateway again: `homun gateway`
+5. The wizard will appear on next Web UI access
+
+<Callout type="warning">
+This resets all data: conversations, memories, skills, automations. The knowledge base files on disk remain, but their index is lost. Use this as a last resort.
+</Callout>
+
+## Troubleshooting
+
+### Wizard Does Not Appear
+
+**Symptom**: you go to the Web UI but see the login page instead of the wizard.
+
+**Cause**: an admin account already exists.
+
+**Fix**: log in with your existing credentials. If you forgot the password, you need to reset the database (see "Resetting Everything" above).
+
+### API Key Rejected
+
+**Symptom**: the wizard says the API key is invalid.
+
+**Check**:
+1. Verify you copied the full key (no trailing spaces)
+2. Check that the key has not been revoked on the provider's dashboard
+3. For Anthropic: ensure the key has "Messages" permissions
+4. For OpenAI: ensure the key has chat completion permissions
+5. Check your network -- the wizard needs to reach the provider's API
+
+### Test Chat Shows No Response
+
+**Symptom**: you send a test message but nothing comes back.
+
+**Check**:
+1. Look at the gateway logs for errors: `RUST_LOG=debug homun gateway`
+2. Verify the LLM provider is reachable from your server
+3. Check if a firewall is blocking outgoing HTTPS connections
+4. Try a different model -- some models may be unavailable or overloaded
+
+### Ollama Not Detected
+
+**Symptom**: wizard says Ollama is not installed or not running.
+
+**Check**:
+1. Verify Ollama is installed: `ollama --version`
+2. Start the Ollama service: `ollama serve`
+3. Check it is accessible: `curl http://localhost:11434/api/tags`
+4. If running in Docker, ensure the Ollama port is mapped to the host

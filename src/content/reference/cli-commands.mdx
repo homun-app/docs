@@ -1,0 +1,312 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# CLI Commands
+
+Homun is controlled through a single binary with subcommands for chat, service management, configuration, skills, and more. Running `homun` with no subcommand starts interactive chat.
+
+## Command Overview
+
+```
+homun                    Interactive chat (default)
+homun chat               Interactive chat or one-shot message
+homun gateway            Start all services (channels, cron, web UI)
+homun config             Configuration management
+homun provider           LLM provider management
+homun status             Show system status
+homun skills             Skill management (install, remove, search)
+homun cron               Cron job management
+homun automations        Automation management
+homun mcp                MCP server management
+homun memory             Memory management
+homun knowledge          Knowledge base (RAG) management
+homun vault              Encrypted secret storage
+homun users              User and identity management
+homun service            OS service management (auto-start)
+homun stop               Stop the running gateway
+homun restart            Restart the gateway
+homun version            Show version
+```
+
+## Chat
+
+Start an interactive conversation or send a one-shot message.
+
+```bash
+# Start interactive chat (default command when no subcommand given)
+homun
+
+# Explicit interactive chat
+homun chat
+
+# Send a one-shot message and get a response
+homun chat -m "What time is it in Tokyo?"
+```
+
+### Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--message` | `-m` | Send a single message and exit |
+
+In interactive mode, type your message and press Enter. The agent responds with streaming output. Type `exit` or press `Ctrl+D` to quit.
+
+## Gateway
+
+Start all services: messaging channels, cron scheduler, heartbeat, and the Web UI.
+
+```bash
+homun gateway
+```
+
+This is the main command for running Homun as a persistent service. It keeps running until stopped with `Ctrl+C` (graceful) or double `Ctrl+C` (E-Stop).
+
+The gateway starts:
+- Web UI on the configured port (default: 18443)
+- All configured messaging channels (Telegram, Discord, Slack, WhatsApp, Email)
+- Cron scheduler for scheduled jobs and automations
+- Heartbeat for proactive wake-ups
+- MCP server connections
+- Knowledge base file watcher (if configured)
+
+### Verbose Mode
+
+```bash
+# Debug logging for troubleshooting
+RUST_LOG=debug homun gateway
+
+# Per-module filtering
+RUST_LOG=homun=debug,sqlx=warn homun gateway
+```
+
+## Configuration
+
+<Callout type="info">
+Dot-path notation maps directly to the TOML file structure. For example, `channels.telegram.token` maps to `[channels.telegram]` `token = "..."` in the TOML file. After setting a value, Homun writes the updated TOML file atomically.
+</Callout>
+
+```bash
+# Launch interactive configuration wizard (TUI dashboard)
+homun config
+
+# Show current configuration
+homun config show
+
+# Get a config value by dot-path
+homun config get providers.default
+homun config get channels.web.port
+
+# Set a config value by dot-path
+homun config set providers.default "anthropic/claude-sonnet-4-5-20250514"
+homun config set channels.web.port 18444
+homun config set browser.enabled true
+
+# Set an array value (JSON syntax)
+homun config set providers.fallback '["openai/gpt-4o", "ollama/llama3"]'
+
+# Initialize default configuration (does not overwrite existing)
+homun config init
+
+# Show config file path
+homun config path
+```
+
+### Dot-Path Examples
+
+| Dot-Path | TOML Equivalent |
+|----------|----------------|
+| `general.name` | `[general]` `name = "..."` |
+| `providers.default` | `[providers]` `default = "..."` |
+| `providers.anthropic.api_key` | `[providers.anthropic]` `api_key = "..."` |
+| `channels.web.port` | `[channels.web]` `port = ...` |
+| `channels.telegram.token` | `[channels.telegram]` `token = "..."` |
+| `browser.enabled` | `[browser]` `enabled = ...` |
+| `sandbox.backend` | `[sandbox]` `backend = "..."` |
+
+## Provider Management
+
+```bash
+homun provider list
+homun provider add anthropic --api-key "sk-ant-..."
+homun provider add openai --api-key "sk-..." --api-base "https://proxy.example.com/v1"
+homun provider remove deepseek
+```
+
+## Skills
+
+```bash
+homun skills list
+homun skills info weather
+homun skills add owner/repo
+homun skills add clawhub:owner/skill-name
+homun skills add owner/repo --force
+homun skills search "weather forecast" --limit 10
+homun skills hub "web scraper" --limit 20
+homun skills remove weather
+```
+
+## Cron Jobs
+
+```bash
+homun cron list
+homun cron add --name "morning-news" --message "Check top tech news and summarize" --cron "0 9 * * *"
+homun cron add --name "health-check" --message "Check server status" --every 3600
+homun cron remove <job-id>
+```
+
+## Automations
+
+```bash
+homun automations list
+homun automations add --name "Daily Digest" --prompt "Summarize my emails" --cron "0 8 * * 1-5" --deliver-to "telegram:123456"
+homun automations toggle <id>
+homun automations run <id>
+homun automations history <id> --limit 20
+homun automations remove <id>
+```
+
+## MCP Servers
+
+```bash
+homun mcp list
+homun mcp catalog
+homun mcp add my-server --command "npx" --args "-y" "@modelcontextprotocol/server-github"
+homun mcp setup github
+homun mcp setup gmail --env "GMAIL_TOKEN=your-token"
+homun mcp remove my-server
+homun mcp toggle my-server
+```
+
+## Memory
+
+```bash
+homun memory status
+homun memory reset
+homun memory reset --force
+```
+
+<Callout type="warning">
+`memory reset` deletes all conversation history, learned facts, and brain files. This cannot be undone.
+</Callout>
+
+## Knowledge Base (RAG)
+
+```bash
+homun knowledge add ~/Documents/handbook.pdf
+homun knowledge add ~/Projects/docs --recursive
+homun knowledge list
+homun knowledge search "deployment checklist" --limit 5
+homun knowledge remove <source-id>
+homun knowledge sync
+```
+
+## Vault
+
+```bash
+homun vault set MY_API_KEY "sk-secret-value"
+homun vault get MY_API_KEY
+homun vault list
+homun vault remove MY_API_KEY
+```
+
+## Users
+
+```bash
+homun users list
+homun users add alice
+homun users add bob --admin
+homun users info alice
+homun users link --user alice --channel telegram --id "123456789" --display-name "Alice"
+homun users unlink --user alice --channel telegram --id "123456789"
+homun users token --user alice --name "zapier-integration"
+homun users remove alice
+```
+
+## OS Service
+
+```bash
+homun service install
+homun service uninstall
+homun service start
+homun service stop
+homun service status
+```
+
+## Shell Completion
+
+Generate shell completions for tab-completion of commands and flags:
+
+<Tabs items={['Bash', 'Zsh', 'Fish']}>
+  <Tabs.Tab>
+```bash
+homun completions bash > ~/.local/share/bash-completion/completions/homun
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+homun completions zsh > ~/.zfunc/_homun
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+homun completions fish > ~/.config/fish/completions/homun.fish
+```
+  </Tabs.Tab>
+</Tabs>
+
+After installing completions, restart your shell or source the completion file.
+
+## Global Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--verbose` | `-v` | Enable debug logging |
+| `--config <path>` | -- | Use a custom config file path |
+| `--help` | `-h` | Show help for the command |
+| `--version` | `-V` | Show version number |
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HOMUN_HOME` | `~/.homun` | Data directory location |
+| `RUST_LOG` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace` |
+| `NO_COLOR` | unset | Disable colored terminal output |
+| `HOMUN_PROVIDERS_DEFAULT` | -- | Override default model |
+| `HOMUN_CHANNELS_WEB_PORT` | -- | Override web UI port |
+
+Any config key can be overridden via environment variable with the `HOMUN_` prefix. See [Configuration > Environment Variable Overrides](/configuration#environment-variable-overrides).
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | General error (check stderr for details) |
+| 2 | Invalid arguments or usage |
+
+## Scripting Examples
+
+### Send a Message and Capture Output
+
+```bash
+response=$(homun chat -m "What is 2+2?")
+echo "$response"
+```
+
+### Check If Gateway Is Running
+
+```bash
+if homun status > /dev/null 2>&1; then
+  echo "Homun is running"
+else
+  echo "Homun is not running"
+fi
+```
+
+### Batch Install Skills
+
+```bash
+for skill in owner/skill1 owner/skill2 owner/skill3; do
+  homun skills add "$skill"
+done
+```

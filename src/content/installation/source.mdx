@@ -1,25 +1,52 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
 # Build from Source
 
 Build Homun directly from source for maximum control and performance.
 
 ## Prerequisites
 
+<Callout type="warning">
+Homun requires **Rust 1.75+**. Check your version with `rustc --version`. If you need to update, run `rustup update`.
+</Callout>
+
 - **Rust 1.75+** -- install via [rustup](https://rustup.rs/)
-- **System dependencies**:
-  - macOS: Xcode Command Line Tools (`xcode-select --install`)
-  - Ubuntu/Debian: `build-essential pkg-config libssl-dev libsqlite3-dev`
-  - Fedora: `gcc openssl-devel sqlite-devel`
+- **System dependencies** (varies by OS):
+
+<Tabs items={['macOS', 'Ubuntu / Debian', 'Fedora', 'Arch Linux']}>
+  <Tabs.Tab>
+```bash
+xcode-select --install
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+sudo apt install build-essential pkg-config libssl-dev libsqlite3-dev
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+sudo dnf install gcc openssl-devel sqlite-devel
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+sudo pacman -S base-devel openssl sqlite
+```
+  </Tabs.Tab>
+</Tabs>
 
 ## Build
 
-1. **Clone the repository**
+<Steps>
+### Clone the repository
 
 ```bash
 git clone https://github.com/homunbot/homunbot.git
 cd homunbot
 ```
 
-2. **Build the release binary**
+### Build the release binary
 
 ```bash
 cargo build --release
@@ -27,17 +54,19 @@ cargo build --release
 
 The binary will be at `target/release/homun`.
 
-3. **Optional: install globally**
+### Optional: install globally
 
 ```bash
 cargo install --path .
 ```
 
 This places `homun` in `~/.cargo/bin/`, which should be in your `PATH`.
+</Steps>
 
 ## First Run
 
-1. **Initialize configuration**
+<Steps>
+### Initialize configuration
 
 ```bash
 homun config
@@ -53,7 +82,7 @@ default_model = "anthropic/claude-sonnet-4-20250514"
 api_key = "sk-ant-..."
 ```
 
-2. **Start the gateway**
+### Start the gateway
 
 ```bash
 homun gateway
@@ -61,9 +90,10 @@ homun gateway
 
 This starts the Web UI, all configured channels, scheduled tasks, and the heartbeat system.
 
-3. **Open the Web UI**
+### Open the Web UI
 
 Navigate to [http://localhost:18080](http://localhost:18080) to complete setup.
+</Steps>
 
 ## File Locations
 
@@ -90,6 +120,10 @@ homun chat -m "What's the weather in Rome?"
 ```
 
 ## Verbose Logging
+
+<Callout type="info">
+Use `RUST_LOG=debug` to see detailed logs for troubleshooting. You can filter by module: `RUST_LOG=homun=debug,sqlx=warn`.
+</Callout>
 
 ```bash
 RUST_LOG=debug homun gateway

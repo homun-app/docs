@@ -1,15 +1,55 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
 # Email
 
 Connect Homun to one or more email accounts so it can receive, process, and respond to emails. The email channel supports multiple accounts, each with its own response mode, sender allowlist, and batching behavior. Homun uses **IMAP IDLE** for instant push notifications and **SMTP** for sending replies.
 
 ## Quick Setup
 
-1. Get IMAP and SMTP credentials for your email provider
-2. Add the email account configuration to `~/.homun/config.toml`
-3. Run `homun gateway`
-4. Send an email to the configured address to test
+<Steps>
+### Step 1: Get Email Credentials
+
+Get IMAP and SMTP credentials for your email provider. See the [Provider-Specific Setup](#provider-specific-setup) section below for details.
+
+<Callout type="warning">
+Most email providers require **app-specific passwords** instead of your regular password. Gmail, Outlook with MFA, and Fastmail all require app passwords. Using your regular password will fail.
+</Callout>
+
+### Step 2: Configure the Account
+
+Add the email account configuration to `~/.homun/config.toml`:
+
+```toml
+[channels.email.accounts.personal]
+enabled = true
+imap_host = "imap.gmail.com"
+imap_port = 993
+smtp_host = "smtp.gmail.com"
+smtp_port = 465
+smtp_tls = true
+username = "you@gmail.com"
+password = "your-app-password"
+from_address = "you@gmail.com"
+allow_from = ["*"]
+mode = "assisted"
+```
+
+### Step 3: Start the Gateway
+
+```bash
+homun gateway
+```
+
+### Step 4: Test
+
+Send an email to the configured address to verify everything works.
+</Steps>
 
 ## How It Works
+
+<Callout type="info">
+Homun uses **IMAP IDLE** (RFC 2177) for instant email notifications. Unlike traditional polling, new emails are pushed immediately with no delay. Each email account runs its own IMAP listener task concurrently.
+</Callout>
 
 1. Homun connects to your IMAP server and selects the configured mailbox (default: INBOX)
 2. It enters **IMAP IDLE** mode, which pushes new email notifications instantly (no polling delay)
@@ -159,6 +199,8 @@ tone_of_voice = ""
 
 ## Provider-Specific Setup
 
+<Tabs items={['Gmail', 'Outlook / Microsoft 365', 'Fastmail', 'Self-Hosted']}>
+  <Tabs.Tab>
 ### Gmail
 
 Gmail requires an **App Password** (not your regular Google password):
@@ -180,8 +222,11 @@ password = "abcd efgh ijkl mnop"  # App Password (spaces optional)
 from_address = "you@gmail.com"
 ```
 
-**Important**: Gmail's "Less secure apps" setting has been removed. You must use App Passwords.
-
+<Callout type="warning">
+Gmail's "Less secure apps" setting has been removed. You **must** use App Passwords.
+</Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
 ### Outlook / Microsoft 365
 
 ```toml
@@ -197,7 +242,8 @@ from_address = "you@company.com"
 ```
 
 For Microsoft 365 accounts with MFA enabled, you may need an app password. Go to **Security** > **Additional security verification** > **App passwords** in your Microsoft account.
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 ### Fastmail
 
 ```toml
@@ -213,7 +259,8 @@ from_address = "you@fastmail.com"
 ```
 
 Fastmail supports app passwords natively. Go to **Settings** > **Privacy & Security** > **App passwords**.
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 ### Self-Hosted (Dovecot / Postfix)
 
 ```toml
@@ -228,7 +275,11 @@ password = "your-password"
 from_address = "homun@yourdomain.com"
 ```
 
-Make sure your IMAP server supports the IDLE extension (Dovecot does by default).
+<Callout type="info">
+Make sure your IMAP server supports the IDLE extension. Dovecot supports IDLE by default. Without IDLE support, Homun cannot receive instant push notifications and will fall back to periodic reconnection.
+</Callout>
+  </Tabs.Tab>
+</Tabs>
 
 ## Response Modes
 
@@ -305,6 +356,10 @@ When a digest is emitted, the agent receives a summary listing all emails with s
 
 ### Sender Allow-List
 
+<Callout type="error">
+An empty `allow_from` list (`[]`) means **deny all** — no emails are processed. This is the default for safety. You must explicitly configure allowed senders.
+</Callout>
+
 The `allow_from` field controls which senders can trigger processing:
 
 | Pattern | Matches |
@@ -313,8 +368,6 @@ The `allow_from` field controls which senders can trigger processing:
 | `"@example.com"` | Any sender from example.com |
 | `"example.com"` | Same as above (@ prefix is optional) |
 | `"*"` | Any sender |
-
-An empty list (`[]`) means **deny all** — no emails are processed. This is the default for safety.
 
 ### Security Framing
 
@@ -337,12 +390,11 @@ This prevents prompt injection attacks via email content. The agent is instructe
 
 ### Password Vault Integration
 
-Passwords can be stored in Homun's encrypted vault instead of in plain text:
+<Callout type="info">
+Passwords can be stored in Homun's encrypted vault instead of in plain text. Set `password = "***ENCRYPTED***"` in config.toml, then store the actual password with `homun vault set email.personal.password "your-app-password"`. The vault uses AES-256-GCM encryption with a master key stored in the OS keychain.
+</Callout>
 
-1. Set `password = "***ENCRYPTED***"` in config.toml
-2. Store the actual password: `homun vault set email.personal.password "your-app-password"`
-
-The vault uses AES-256-GCM encryption with a master key stored in the OS keychain. If the user updates the password in the vault at runtime, the email channel picks up the new password on the next IMAP reconnect.
+If the user updates the password in the vault at runtime, the email channel picks up the new password on the next IMAP reconnect.
 
 ## Troubleshooting
 

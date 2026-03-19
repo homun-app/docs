@@ -1,3 +1,5 @@
+import { Callout, Steps, Tabs, Cards } from 'nextra/components'
+
 # Getting Started with Homun
 
 This guide walks you from zero to a working Homun instance with your first chat, your first channel, and your first automation.
@@ -6,12 +8,10 @@ This guide walks you from zero to a working Homun instance with your first chat,
 
 ---
 
-## Step 1: Install Homun
+## Install Homun
 
-Choose one method:
-
-### Option A: Docker (recommended)
-
+<Tabs items={['Docker (recommended)', 'Build from Source', 'Pre-built Binary']}>
+  <Tabs.Tab>
 ```bash
 git clone https://github.com/homunbot/homun.git
 cd homun
@@ -20,9 +20,8 @@ docker compose up -d
 ```
 
 Homun is now running at **https://localhost**.
-
-### Option B: Build from source
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 Requires Rust 1.75+.
 
 ```bash
@@ -30,14 +29,18 @@ git clone https://github.com/homunbot/homun.git
 cd homun
 cargo install --path . --features full
 ```
-
-### Option C: Pre-built binary
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 Download from [GitHub Releases](https://github.com/homunbot/homun/releases), verify the SHA256 checksum, and place the binary in your PATH.
+  </Tabs.Tab>
+</Tabs>
 
 ---
 
-## Step 2: First boot and setup wizard
+## First Boot and Setup
+
+<Steps>
+### Open the Web UI
 
 **Docker users**: open **https://localhost** in your browser. Accept the self-signed certificate warning.
 
@@ -49,44 +52,34 @@ homun gateway
 
 Then open **https://localhost** in your browser.
 
-On first boot, Homun redirects you to the **setup wizard**:
+### Complete the Setup Wizard
+
+On first boot, Homun redirects you to the setup wizard:
 
 1. **Create admin account** -- choose a username and password
 2. **Choose your LLM provider** -- select one (Anthropic, OpenAI, Ollama, etc.) and enter the API key
 3. **Test the connection** -- the wizard verifies your API key works
 4. **Done** -- you're redirected to the dashboard
 
-> **Tip**: If you want fully free/local operation, install [Ollama](https://ollama.com), pull a model (`ollama pull qwen3:latest`), and select "Ollama" in the wizard. Docker users can enable the Ollama sidecar: `docker compose --profile with-ollama up -d`.
+<Callout type="info">
+If you want fully free/local operation, install [Ollama](https://ollama.com), pull a model (`ollama pull qwen3:latest`), and select "Ollama" in the wizard. Docker users can enable the Ollama sidecar: `docker compose --profile with-ollama up -d`.
+</Callout>
 
----
+### Send Your First Message
 
-## Step 3: Send your first message
+**Via Web UI**: Click **Chat** in the sidebar. Type a message and press Enter. Homun responds with streaming text. You'll see a tool timeline when Homun uses tools.
 
-### Via Web UI
-
-Click **Chat** in the sidebar. Type a message and press Enter. Homun responds with streaming text. You'll see a tool timeline when Homun uses tools (web search, file operations, etc.).
-
-### Via CLI
-
-```bash
-homun chat
-```
-
-This opens an interactive REPL. Type your message and press Enter.
-
-For a single response without entering the REPL:
+**Via CLI**:
 
 ```bash
 homun chat -m "What day is it today?"
 ```
 
----
-
-## Step 4: Connect your first channel
+### Connect Your First Channel
 
 Channels let you talk to Homun from Telegram, Discord, WhatsApp, Slack, or Email.
 
-### Example: Telegram
+**Example: Telegram**
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) on Telegram and copy the token
 2. Open the Web UI and go to **Channels**
@@ -95,17 +88,13 @@ Channels let you talk to Homun from Telegram, Discord, WhatsApp, Slack, or Email
 5. Toggle **Enabled** and save
 6. Homun connects automatically -- send a message to your bot
 
-> **Tip**: Find your Telegram user ID by messaging [@userinfobot](https://t.me/userinfobot).
+<Callout type="info">
+Find your Telegram user ID by messaging [@userinfobot](https://t.me/userinfobot). Other channels follow the same pattern: get credentials from the platform, configure in the Channels page, and enable.
+</Callout>
 
-Other channels follow the same pattern: get credentials from the platform, configure in the Channels page, and enable.
+### Create Your First Automation
 
----
-
-## Step 5: Create your first automation
-
-Automations let Homun perform tasks on a trigger (schedule, webhook, or manual).
-
-### Via Web UI (visual builder)
+**Via Web UI (visual builder)**:
 
 1. Go to **Automations** in the sidebar
 2. Click **New Automation**
@@ -115,49 +104,41 @@ Automations let Homun perform tasks on a trigger (schedule, webhook, or manual).
    - **Message** node: send the result to your Telegram
 4. Save and enable the automation
 
-### Via CLI (cron)
-
-For simpler scheduled tasks:
+**Via CLI (cron)**: For simpler scheduled tasks:
 
 ```bash
 homun cron add --schedule "0 9 * * *" --message "Summarize today's top tech news and send it to me"
 ```
 
-This creates a daily 9am task. List your cron jobs with `homun cron list`.
+### Teach Homun About You
 
----
-
-## Step 6: Teach Homun about you
-
-Homun has a persistent memory system. It remembers facts about you across sessions.
-
-Tell it things naturally in chat:
+Homun has a persistent memory system. Tell it things naturally in chat:
 
 - "Remember that I prefer Python over JavaScript"
 - "My timezone is Europe/Rome"
 - "I'm working on a project called Acme and the repo is at github.com/me/acme"
 
 Homun stores these in your user profile (`~/.homun/brain/USER.md`). You can view and edit memories in the **Memory** page of the Web UI.
+</Steps>
 
 ---
 
-## What's next?
+## What's Next?
 
-Now that Homun is running, here are things to explore:
-
-| Feature | Where | What it does |
-|---------|-------|-------------|
-| **Knowledge base** | Web UI > Knowledge | Upload docs (PDF, DOCX, code) and ask questions about them |
-| **Skills** | Web UI > Skills | Install community skills from GitHub or ClawHub |
-| **MCP servers** | Web UI > MCP | Connect external services (Google Workspace, GitHub, etc.) |
-| **Browser automation** | Chat | Ask Homun to browse the web ("Go to example.com and...") |
-| **Vault** | Web UI > Vault | Store secrets securely (API keys, passwords) with 2FA |
-| **Workflows** | Web UI > Workflows | Multi-step tasks with approval gates |
-| **OS service** | CLI | `homun service install` to run Homun on boot |
+<Cards>
+  <Cards.Card title="Knowledge Base" href="/features/memory#knowledge-base-rag" />
+  <Cards.Card title="Skills" href="/features/skills" />
+  <Cards.Card title="MCP Servers" href="/features/tools#adding-custom-tools-via-mcp" />
+  <Cards.Card title="Browser Automation" href="/features/browser" />
+  <Cards.Card title="Vault & Security" href="/configuration/security" />
+  <Cards.Card title="Workflows" href="/features/automations#workflows" />
+  <Cards.Card title="OS Service" href="/installation/service" />
+  <Cards.Card title="Remote Access" href="/configuration/remote-access" />
+</Cards>
 
 ---
 
-## Useful commands
+## Useful Commands
 
 ```bash
 homun status           # System health check
@@ -172,7 +153,9 @@ homun stop             # Stop the running gateway
 
 ## Troubleshooting
 
+<Callout type="warning">
 **Can't access https://localhost**: accept the self-signed certificate warning in your browser, or set `HOMUN_DOMAIN` in `.env` for a real domain with automatic HTTPS.
+</Callout>
 
 **LLM provider errors**: check your API key in the web Settings page. Use `homun status` to see provider health.
 
@@ -180,4 +163,4 @@ homun stop             # Stop the running gateway
 
 **Ollama models not working**: ensure Ollama is running (`ollama serve`) and you've pulled a model (`ollama pull qwen3:latest`).
 
-For more details, see the [architecture docs](services/README.md) or check the [changelog](../CHANGELOG.md).
+For more details, see the [Troubleshooting](/troubleshooting) page.

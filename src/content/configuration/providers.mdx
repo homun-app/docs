@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # LLM Providers
 
 Homun supports 6 LLM providers and 14+ models out of the box. You configure a default model, optional fallback chain, and per-provider API keys. Homun automatically routes requests to the correct provider based on the model prefix, detects each model's capabilities, and handles failures with circuit breakers and retry logic.
@@ -50,8 +52,14 @@ homun provider add openai --api-key "sk-..." --api-base "https://proxy.example.c
 homun provider remove deepseek
 ```
 
-## Anthropic (Claude)
+## Provider Configuration
 
+<Callout type="warning">
+Never commit API keys to version control. Use the encrypted vault (`homun vault set`) or environment variables for production deployments. See the "Storing Keys Securely" section under each provider.
+</Callout>
+
+<Tabs items={['Anthropic', 'OpenAI', 'Ollama', 'OpenRouter', 'DeepSeek', 'Groq']}>
+  <Tabs.Tab>
 Anthropic is the recommended provider. Claude models have native tool use, extended thinking, and vision support -- all features that Homun uses extensively.
 
 ```toml
@@ -82,22 +90,6 @@ All Claude models support:
 
 Claude Sonnet 4.5 and Opus 4 support extended thinking mode, where the model reasons through complex problems step-by-step before answering. Homun enables this automatically when the model supports it. The thinking process is not shown to the user -- only the final answer appears.
 
-Extended thinking is particularly useful for:
-- Multi-step tool use chains
-- Complex code analysis
-- Tasks requiring careful planning before execution
-- Mathematical or logical reasoning
-
-### Testing Your Setup
-
-After configuring, verify the connection:
-
-```bash
-homun chat -m "Hello, what model are you?"
-```
-
-You should see a response identifying the Claude model. If you get an error, check that your API key is valid and has not been revoked.
-
 ### Storing Keys Securely
 
 Instead of putting your API key directly in `config.toml`, use the encrypted vault:
@@ -109,11 +101,8 @@ homun vault set ANTHROPIC_API_KEY "sk-ant-api03-..."
 # Reference in config
 homun config set providers.anthropic.api_key '${vault:ANTHROPIC_API_KEY}'
 ```
-
-This keeps the key encrypted at rest and prevents accidental exposure in backups or version control.
-
-## OpenAI (GPT)
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 ```toml
 [providers.openai]
 api_key = "sk-proj-..."
@@ -158,11 +147,8 @@ For OpenAI-compatible servers (vLLM, text-generation-inference, LocalAI, LiteLLM
 api_key = "sk-..."
 base_url = "https://my-proxy.example.com/v1"
 ```
-
-This makes any OpenAI-compatible API work with Homun as if it were OpenAI directly.
-
-## Ollama (Local Models)
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 Ollama lets you run models locally with no API key, no data leaving your machine, and no usage costs. This is ideal for privacy-sensitive workflows or offline use.
 
 ### Installation
@@ -175,8 +161,6 @@ Ollama lets you run models locally with no API key, no data leaving your machine
 3. Pull a model:
    ```bash
    ollama pull llama3
-   # Or a larger model for better quality:
-   ollama pull llama3:70b
    ```
 4. Configure Homun:
    ```toml
@@ -201,31 +185,11 @@ Any model available in the [Ollama library](https://ollama.com/library) works. C
 | `ollama/codellama` | 7B (3.8 GB) | 5 GB | Code generation and analysis |
 | `ollama/gemma2` | 9B (5.4 GB) | 7 GB | Google's compact model, solid general use |
 | `ollama/qwen2.5` | 7B (4.7 GB) | 6 GB | Strong multilingual support |
-| `ollama/deepseek-coder-v2` | 16B (8.9 GB) | 12 GB | Code-focused tasks |
 | `ollama/phi3` | 3.8B (2.3 GB) | 4 GB | Ultra-lightweight, runs on CPU |
 
-### Hardware Requirements
-
-| Model Size | RAM (CPU-only) | GPU VRAM | Performance |
-|------------|:--------:|:---------:|-------------|
-| 3B-4B | 8 GB | 4 GB | Fast on any modern machine |
-| 7B-9B | 16 GB | 6-8 GB | Good speed with GPU, usable on CPU |
-| 13B | 24 GB | 10-12 GB | Slower on CPU, needs dedicated GPU |
-| 34B | 48 GB | 24 GB | Requires workstation/server GPU |
-| 70B | 64 GB+ | 40-48 GB | Needs high-end GPU (A100, dual 4090) |
-
-Without a GPU, Ollama falls back to CPU inference, which works but is 5-20x slower depending on model size. For 7B models on a modern MacBook (M1/M2/M3), CPU performance is acceptable.
-
-### Capabilities and XML Fallback
-
+<Callout type="info">
 Most Ollama models lack native tool use (function calling). Homun automatically detects this and uses its **XML dispatch system** -- it formats tool definitions as XML instructions in the system prompt and parses XML-formatted tool calls from the model's text output. This works but is slightly less reliable than native function calling.
-
-| Feature | Support |
-|---------|---------|
-| Vision | Varies by model (llava, bakllava support it) |
-| Tool use | XML fallback (automatic) |
-| Thinking | No |
-| Streaming | Yes |
+</Callout>
 
 ### Remote Ollama Server
 
@@ -250,9 +214,8 @@ ollama list
 # Test through Homun
 homun chat -m "Hello" --model "ollama/llama3"
 ```
-
-## OpenRouter
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 OpenRouter provides access to 100+ models from multiple providers through a single API key and unified billing.
 
 ```toml
@@ -271,26 +234,16 @@ openrouter/anthropic/claude-3.5-sonnet
 openrouter/meta-llama/llama-3.1-405b-instruct
 openrouter/google/gemini-pro-1.5
 openrouter/mistralai/mixtral-8x22b-instruct
-openrouter/microsoft/phi-3-medium-128k-instruct
-openrouter/cohere/command-r-plus
 ```
 
 Browse all available models at [openrouter.ai/models](https://openrouter.ai/models).
 
 ### When to Use OpenRouter
 
-OpenRouter is ideal when you want:
-- Access to models from providers Homun does not natively support (Google Gemini, Cohere, etc.)
-- A single bill for multiple providers
-- Automatic routing to the cheapest available instance of a model
-- Access to open-weight models (Llama, Mixtral) without running them locally
+OpenRouter is ideal when you want access to models from providers Homun does not natively support (Google Gemini, Cohere, etc.), a single bill for multiple providers, automatic routing to the cheapest available instance of a model, or access to open-weight models (Llama, Mixtral) without running them locally.
 
-### Cost Tracking
-
-OpenRouter provides per-request cost tracking on their dashboard. Homun does not track OpenRouter costs separately, but the Homun dashboard shows request counts and token usage for monitoring purposes.
-
-## DeepSeek
-
+  </Tabs.Tab>
+  <Tabs.Tab>
 DeepSeek offers high-quality models at competitive pricing, particularly strong for coding tasks.
 
 ```toml
@@ -309,12 +262,11 @@ Get your API key from [platform.deepseek.com](https://platform.deepseek.com/).
 
 Both models support tool use and streaming. DeepSeek models do not support vision.
 
-### Cost Advantage
-
+<Callout type="info">
 DeepSeek is one of the most cost-effective providers. At roughly $0.14/M input tokens and $0.28/M output tokens, it costs 10-20x less than Claude Sonnet. Consider it for high-volume tasks like cron jobs and automations where cost matters more than peak quality.
-
-## Groq (Fast Inference)
-
+</Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
 Groq provides extremely fast inference using their custom LPU hardware. Response times are typically 5-10x faster than other providers.
 
 ```toml
@@ -333,19 +285,9 @@ Get your API key from [console.groq.com](https://console.groq.com/).
 | `groq/mixtral-8x7b-32768` | 32K tokens | Longer contexts, fast |
 | `groq/gemma-7b-it` | 8K tokens | Fast, lightweight |
 
-Groq models support streaming and tool use. They do not support vision.
-
-### Rate Limits
-
-Groq's free tier has strict rate limits:
-
-| Limit Type | Free Tier |
-|------------|-----------|
-| Requests per minute | 30 |
-| Tokens per minute | 14,400 (some models) |
-| Requests per day | 14,400 |
-
-If you hit limits frequently, consider using Groq as a fallback rather than primary provider, or upgrade to a paid plan for higher limits.
+<Callout type="warning">
+Groq's free tier has strict rate limits (30 requests/minute, 14,400 requests/day). If you hit limits frequently, consider using Groq as a fallback rather than primary provider, or upgrade to a paid plan.
+</Callout>
 
 ### Best Use Case
 
@@ -356,6 +298,8 @@ Groq excels as a "fast response" fallback. Configure it in your failover chain f
 default = "anthropic/claude-sonnet-4-5-20250514"
 fallback = ["groq/llama3-70b-8192", "ollama/llama3"]
 ```
+  </Tabs.Tab>
+</Tabs>
 
 ## Model Capabilities Reference
 
@@ -383,7 +327,9 @@ Homun auto-detects capabilities per model at startup. The detection logic lives 
 
 ## Failover Chain
 
-Configure fallback models so Homun keeps working if your primary provider goes down:
+<Callout type="info">
+Configure fallback models so Homun keeps working if your primary provider goes down. The failover chain is tried in order -- the first healthy provider handles the request. Provider health is managed by independent circuit breakers that automatically recover when the provider comes back online.
+</Callout>
 
 ```toml
 [providers]

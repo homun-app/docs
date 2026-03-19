@@ -1,3 +1,5 @@
+import { Callout, Cards } from 'nextra/components'
+
 # Homun
 
 **Your personal AI assistant** — a digital homunculus that lives on your machine and works 24/7.
@@ -14,6 +16,10 @@ docker compose up -d
 
 Open **https://localhost** and complete the setup wizard. [Full installation guide &rarr;](/installation/docker)
 
+<Callout type="info">
+Homun runs entirely on your machine. Your data never leaves unless you configure an external LLM provider. For fully offline operation, use [Ollama](/configuration/providers) as your LLM provider.
+</Callout>
+
 ## Why Homun?
 
 - **Single binary** — no Python, no Node.js runtime needed
@@ -26,26 +32,39 @@ Open **https://localhost** and complete the setup wizard. [Full installation gui
 ## Explore the Docs
 
 ### Get Up and Running
-- [Getting Started](/getting-started) — zero to first chat in 15 minutes
-- [Installation](/installation/docker) — Docker, build from source, or system service
-- [Setup Wizard](/web-ui/setup-wizard) — first-time configuration walkthrough
 
-### Connect Your Channels
-- [Telegram](/channels/telegram) · [WhatsApp](/channels/whatsapp) · [Discord](/channels/discord) · [Slack](/channels/slack) · [Email](/channels/email) · [Web UI](/channels/web) · [CLI](/channels/cli)
+<Cards>
+  <Cards.Card title="Getting Started" href="/getting-started" />
+  <Cards.Card title="Docker Install" href="/installation/docker" />
+  <Cards.Card title="Build from Source" href="/installation/source" />
+  <Cards.Card title="Setup Wizard" href="/web-ui/setup-wizard" />
+</Cards>
 
 ### Configure & Customize
-- [LLM Providers](/configuration/providers) — set up Claude, GPT-4, Ollama, and more
-- [Security](/configuration/security) — authentication, vault, 2FA, API keys
-- [Remote Access](/configuration/remote-access) — access Homun from anywhere
+
+<Cards>
+  <Cards.Card title="LLM Providers" href="/configuration/providers" />
+  <Cards.Card title="Security" href="/configuration/security" />
+  <Cards.Card title="Remote Access" href="/configuration/remote-access" />
+  <Cards.Card title="Configuration" href="/configuration" />
+</Cards>
 
 ### Features
-- [Skills](/features/skills) — install and create agent skills
-- [Memory & Knowledge](/features/memory) — long-term memory and RAG knowledge base
-- [Automations](/features/automations) — cron jobs, visual flows, and workflows
-- [Browser Automation](/features/browser) — autonomous web browsing
-- [Built-in Tools](/features/tools) — 20+ tools for files, web, shell, and more
+
+<Cards>
+  <Cards.Card title="Skills" href="/features/skills" />
+  <Cards.Card title="Memory & Knowledge" href="/features/memory" />
+  <Cards.Card title="Automations" href="/features/automations" />
+  <Cards.Card title="Browser Automation" href="/features/browser" />
+  <Cards.Card title="Built-in Tools" href="/features/tools" />
+  <Cards.Card title="Sandbox" href="/features/sandbox" />
+</Cards>
 
 ### Reference
-- [REST API](/reference/api) — 50+ endpoints
-- [CLI Commands](/reference/cli-commands) — full command reference
-- [Troubleshooting](/troubleshooting) — common issues and fixes
+
+<Cards>
+  <Cards.Card title="REST API" href="/reference/api" />
+  <Cards.Card title="CLI Commands" href="/reference/cli-commands" />
+  <Cards.Card title="Trust Model" href="/reference/trust-model" />
+  <Cards.Card title="Troubleshooting" href="/troubleshooting" />
+</Cards>

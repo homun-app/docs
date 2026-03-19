@@ -1,3 +1,5 @@
+import { Callout, Steps } from 'nextra/components'
+
 # Troubleshooting
 
 This page covers the most common problems you may encounter with Homun, organized by symptom. Start with the 60-second diagnostic ladder, then find your specific issue in the sections below.
@@ -6,7 +8,8 @@ This page covers the most common problems you may encounter with Homun, organize
 
 When something is wrong, run these checks in order. Most problems are caught in the first two steps.
 
-**Step 1: Is Homun running?**
+<Steps>
+### Is Homun running?
 
 ```bash
 homun status
@@ -14,7 +17,7 @@ homun status
 
 If this returns an error or shows "not running", the gateway is not started. Start it with `homun gateway`.
 
-**Step 2: Check the logs**
+### Check the logs
 
 ```bash
 RUST_LOG=debug homun gateway
@@ -22,7 +25,7 @@ RUST_LOG=debug homun gateway
 
 Look for error messages at startup. The most common issues (bad config, missing API key, port conflict) show up immediately in the log output.
 
-**Step 3: Test the LLM provider**
+### Test the LLM provider
 
 ```bash
 homun chat -m "hello"
@@ -30,7 +33,7 @@ homun chat -m "hello"
 
 If this fails with an API error, your provider is misconfigured. Check your API key and model string.
 
-**Step 4: Check the config**
+### Check the config
 
 ```bash
 homun config show
@@ -39,9 +42,10 @@ homun config get providers.default
 
 Verify the default model is set and the API key is present.
 
-**Step 5: Check the Web UI**
+### Check the Web UI
 
 Open `https://localhost:18443` in your browser. If you see a certificate warning, click through it (self-signed cert is normal). If the page does not load, the gateway is not running or the port is wrong.
+</Steps>
 
 ## Gateway Issues
 
@@ -49,11 +53,9 @@ Open `https://localhost:18443` in your browser. If you see a certificate warning
 
 **Symptom**: `homun gateway` exits immediately or shows an error.
 
-**Config parse error**:
-```
-Error: invalid config at channels.web.port: expected integer, got string "abc"
-```
-Fix: Check `~/.homun/config.toml` for syntax errors. Run `homun config show` to see if the config loads at all. Common mistakes include missing quotes around strings, unclosed brackets, or using JSON syntax instead of TOML.
+<Callout type="error">
+**Config parse error**: Check `~/.homun/config.toml` for syntax errors. Run `homun config show` to see if the config loads at all. Common mistakes include missing quotes around strings, unclosed brackets, or using JSON syntax instead of TOML.
+</Callout>
 
 **Port already in use**:
 ```
@@ -68,15 +70,13 @@ lsof -i :18443
 homun config set channels.web.port 18444
 ```
 
-**Missing API key**:
-```
-Error: missing required field: providers.default
-```
-Fix: Set a default LLM provider:
+<Callout type="error">
+**Missing API key**: If you see `missing required field: providers.default`, set a default LLM provider:
 ```bash
 homun config set providers.default "anthropic/claude-sonnet-4-5-20250514"
 homun config set providers.anthropic.api_key "sk-ant-..."
 ```
+</Callout>
 
 **Database migration error**:
 ```
@@ -97,7 +97,6 @@ Error: Permission denied (os error 13)
 Fix: Check file permissions on `~/.homun/`. The directory and all files should be owned by your user:
 ```bash
 ls -la ~/.homun/
-# Fix permissions if needed
 chmod -R u+rw ~/.homun/
 ```
 
@@ -114,7 +113,6 @@ Common causes:
 - **Out of memory**: Large knowledge bases or many concurrent sessions can exhaust memory. Check with `homun status` and close unused sessions.
 - **Database lock**: If another Homun process is running, SQLite may conflict. Ensure only one gateway is running:
   ```bash
-  # Check for running processes
   pgrep -f "homun gateway"
   ```
 
@@ -163,15 +161,6 @@ If tokens are present but channels still fail, check the gateway logs for channe
 3. Try the Web UI pairing at **Channels > WhatsApp** which provides a visual QR code flow
 4. If re-pairing after a disconnection, the old session may be stale. The gateway will attempt to re-pair automatically.
 
-### Telegram Bot Doesn't Receive Messages
-
-**Symptom**: You send messages in Telegram but the gateway logs show no incoming messages.
-
-1. Verify the bot token with Telegram's BotFather
-2. Make sure no other instance of the bot is running (Telegram only sends messages to one receiver)
-3. Check if the bot was started (`/start` in Telegram)
-4. Check firewall -- Telegram uses long polling over HTTPS, so outbound 443 must be open
-
 ## LLM Provider Issues
 
 ### API Key Invalid
@@ -179,20 +168,8 @@ If tokens are present but channels still fail, check the gateway logs for channe
 **Symptom**: Error message mentioning "401", "unauthorized", or "invalid API key".
 
 ```bash
-# Check the stored key
 homun config get providers.anthropic.api_key
-
-# Check if key is in vault
 homun vault list
-```
-
-If the key looks correct, test it directly:
-```bash
-# Test Anthropic key
-curl -H "x-api-key: sk-ant-..." \
-  -H "anthropic-version: 2023-06-01" \
-  https://api.anthropic.com/v1/messages \
-  -d '{"model":"claude-sonnet-4-5-20250514","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}'
 ```
 
 Common causes:
@@ -215,37 +192,6 @@ Immediate fixes:
   fallback = ["openai/gpt-4o", "ollama/llama3"]
   ```
 
-Long-term fixes:
-- Upgrade your API plan
-- Use cheaper models (Haiku, GPT-4o-mini) for cron jobs and automations
-- Reduce the number of concurrent automations
-
-### Wrong Model Used
-
-**Symptom**: The agent says it is a different model than expected.
-
-Check the configured default:
-```bash
-homun config get providers.default
-```
-
-The model string must include the provider prefix:
-- Correct: `anthropic/claude-sonnet-4-5-20250514`
-- Wrong: `claude-sonnet-4-5-20250514` (missing prefix)
-
-### Context Too Long
-
-**Symptom**: Error mentioning "context length exceeded" or "too many tokens".
-
-Fix: Clear the current session to reset context:
-- In Web UI: start a new chat session
-- In CLI: exit and restart `homun chat`
-
-If the problem persists, check:
-- Large files attached to the conversation
-- Very long system prompts from many active skills
-- Knowledge base injection adding too much context
-
 ### Ollama Not Responding
 
 **Symptom**: Errors when using `ollama/` models.
@@ -259,15 +205,6 @@ ollama serve
 
 # Verify the model is pulled
 ollama list
-
-# Test the model directly
-ollama run llama3 "hello"
-```
-
-If Ollama is on a different host:
-```bash
-# Test the remote connection
-curl http://192.168.1.100:11434/api/tags
 ```
 
 Check that the `base_url` in config matches:
@@ -282,19 +219,10 @@ homun config get providers.ollama.base_url
 **Symptom**: Browser shows "connection refused" or timeout.
 
 1. **Check the gateway is running**: `homun status`
-2. **Check the port**:
-   ```bash
-   homun config get channels.web.port
-   ```
+2. **Check the port**: `homun config get channels.web.port`
 3. **Check the URL**: Make sure you are using `https://` (not `http://`). Homun serves HTTPS only.
 4. **HTTPS certificate warning**: Self-signed certs trigger browser warnings. Click "Advanced" > "Proceed" to continue.
-5. **Firewall**: Check that port 18443 is not blocked:
-   ```bash
-   # macOS
-   sudo pfctl -s rules | grep 18443
-   # Linux
-   sudo iptables -L -n | grep 18443
-   ```
+5. **Firewall**: Check that port 18443 is not blocked
 6. **Binding address**: Homun binds to `127.0.0.1` by default. If accessing from another machine, you need a reverse proxy or SSH tunnel. See [Remote Access](/configuration/remote-access).
 
 ### Login Fails
@@ -315,12 +243,6 @@ homun config get providers.ollama.base_url
 - **Nginx timeout**: If using Nginx as reverse proxy, ensure `proxy_read_timeout` is set to at least 300s and WebSocket headers are configured. See [Remote Access > Nginx](/configuration/remote-access#nginx).
 - **Browser issue**: Try a different browser. Some browser extensions (ad blockers, privacy extensions) can interfere with WebSocket connections.
 
-### Web UI Shows Stale Data
-
-**Symptom**: Changes made via CLI or API do not appear in the Web UI.
-
-Refresh the page. The Web UI fetches data on page load and does not auto-refresh all sections. For real-time updates, the chat page uses WebSocket, but other pages require a manual refresh.
-
 ## Browser Automation Issues
 
 ### Playwright Not Found
@@ -328,45 +250,15 @@ Refresh the page. The Web UI fetches data on page load and does not auto-refresh
 **Symptom**: Browser tool returns "playwright not found" or "npx not found".
 
 ```bash
-# Check Node.js is installed
 node --version
 npx --version
 ```
 
 If Node.js is not installed, install it from [nodejs.org](https://nodejs.org). Homun requires Node.js 18+.
 
-If Node.js is installed but Playwright is not working:
-```bash
-# Manually test Playwright MCP
-npx @playwright/mcp@latest --help
-```
-
-### Browser Cannot Load Pages
-
-**Symptom**: The browser tool navigates but pages show errors or are blank.
-
-- **Headless mode issues**: Some websites block headless browsers. Try with `headless = false`:
-  ```toml
-  [browser]
-  enabled = true
-  headless = false
-  ```
-- **Anti-bot detection**: Homun includes stealth injection, but sophisticated anti-bot systems may still detect it. This is a known limitation.
-- **Network issues**: The browser process needs internet access. Check if your firewall blocks outbound connections from the browser.
-
-### Browser Takes Too Long
-
-**Symptom**: Browser operations timeout.
-
-- Complex pages with many elements take longer to snapshot
-- The `wait_for_stable_snapshot` logic waits for the page to stop changing, which can be slow on dynamic pages
-- Try reducing the page complexity by navigating to specific subpages instead of the homepage
-
 ## Performance Issues
 
 ### High Memory Usage
-
-**Symptom**: Homun process uses more memory than expected.
 
 | Component | Typical Memory | Notes |
 |-----------|:-------:|-------|
@@ -382,68 +274,24 @@ To reduce memory:
 - Use `openai` embedding provider instead of `fastembed` (offloads to API)
 - Restart the gateway periodically to clear accumulated session data
 
-### Slow Responses
-
-**Symptom**: Responses take 30+ seconds.
-
-Check each stage:
-1. **LLM response time**: Test with `homun chat -m "hello"` -- if this is slow, the bottleneck is the LLM provider.
-2. **Network latency**: Run `ping api.anthropic.com` (or your provider's domain) to check network conditions.
-3. **Complex tool chains**: If the agent uses 5+ tools in sequence, each tool adds latency. This is normal for complex tasks.
-4. **Large context**: Very long conversations slow down the LLM. Start a new session for unrelated questions.
-5. **Ollama performance**: Local models on CPU are 5-20x slower than GPU. Ensure your GPU is being used:
-   ```bash
-   ollama ps  # Shows running models and their GPU usage
-   ```
-
 ## Log Locations and Reading
 
-### Where Logs Are
-
-| Location | Content |
-|----------|---------|
-| Terminal (stdout) | Real-time gateway logs |
-| `~/.homun/logs/homun.log` | File logs (when file logging is enabled) |
-| Web UI > Logs | SSE stream of real-time logs |
-| `/api/v1/logs/stream` | API endpoint for log streaming |
+<Callout type="info">
+Logs are available in four locations: terminal stdout (real-time), `~/.homun/logs/homun.log` (when file logging is enabled), Web UI > Logs (SSE stream), and the API endpoint `/api/v1/logs/stream`.
+</Callout>
 
 ### Log Levels
 
 ```bash
-# Error only (production)
-RUST_LOG=error homun gateway
-
-# Warnings and errors
-RUST_LOG=warn homun gateway
-
-# Normal operation (default)
-RUST_LOG=info homun gateway
-
-# Detailed debugging
-RUST_LOG=debug homun gateway
-
-# Everything (very verbose)
-RUST_LOG=trace homun gateway
+RUST_LOG=error homun gateway     # Error only (production)
+RUST_LOG=warn homun gateway      # Warnings and errors
+RUST_LOG=info homun gateway      # Normal operation (default)
+RUST_LOG=debug homun gateway     # Detailed debugging
+RUST_LOG=trace homun gateway     # Everything (very verbose)
 
 # Per-module filtering
 RUST_LOG=homun=debug,sqlx=warn,reqwest=warn homun gateway
 ```
-
-### Reading Log Output
-
-Log entries follow this format:
-```
-2025-01-15T10:30:00.123Z  INFO homun::agent::agent_loop: Processing message session_id=abc123
-2025-01-15T10:30:01.456Z DEBUG homun::provider::anthropic: Sending request model="claude-sonnet-4-5-20250514" tokens=1234
-2025-01-15T10:30:02.789Z  WARN homun::security: Exfiltration guard triggered pattern="api_key"
-```
-
-Key fields:
-- **Timestamp**: When the event happened
-- **Level**: ERROR, WARN, INFO, DEBUG, TRACE
-- **Module**: Where in the code it happened (e.g., `homun::agent::agent_loop`)
-- **Message**: What happened
-- **Fields**: Structured key-value data (e.g., `session_id=abc123`)
 
 ### Common Log Patterns to Watch For
 
@@ -458,6 +306,10 @@ Key fields:
 | `Circuit breaker recovery` | Provider back online | Normal; failover is disengaged |
 
 ## Common Error Messages
+
+<Callout type="error">
+These are the most frequent errors and their fixes. If your error is not listed here, check the debug logs with `RUST_LOG=debug homun gateway`.
+</Callout>
 
 | Error | Cause | Fix |
 |-------|-------|-----|
@@ -483,12 +335,6 @@ When reporting a bug, include:
 4. **Error message**: The exact error from the logs
 5. **Configuration** (redact secrets): `homun config show`
 6. **Log output**: Relevant lines from `RUST_LOG=debug homun gateway`
-
-### Where to Get Help
-
-- **GitHub Issues**: Report bugs and feature requests at the project repository
-- **Documentation**: This site covers all features and configuration options
-- **Logs**: Most problems are diagnosable from the debug logs
 
 ### Quick Self-Help Checklist
 

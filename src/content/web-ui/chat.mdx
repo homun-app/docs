@@ -1,10 +1,14 @@
+import { Callout } from 'nextra/components'
+
 # Chat
 
 The chat interface is where you interact with Homun through the Web UI. It provides a rich conversational experience with real-time streaming, full markdown rendering, tool execution visibility, multi-session support, and file uploads.
 
 ## Streaming Responses
 
+<Callout type="info">
 Messages from Homun stream in real-time, token by token. You see the response as it is being generated, with no waiting for the full reply. This uses Server-Sent Events (SSE) over a WebSocket connection for low-latency delivery.
+</Callout>
 
 Streaming works for:
 - Regular text responses
@@ -52,11 +56,15 @@ For complex interactions that involve many tool calls (e.g., research tasks with
 
 ### Thinking/Reasoning Blocks
 
+<Callout type="info">
 When using models that support extended thinking (like Claude with thinking enabled), the reasoning process appears in a collapsible block. This shows you the LLM's thought process before it takes action. Thinking blocks are collapsed by default and styled differently from regular messages.
+</Callout>
 
 ## Multi-Session Support
 
-The chat supports multiple concurrent sessions, letting you keep conversations organized by topic or task.
+<Callout type="info">
+The chat supports multiple concurrent sessions, letting you keep conversations organized by topic or task. Sessions are stored in SQLite and persist across gateway restarts. Sessions from all channels (CLI, Telegram, Web, etc.) are visible in the sidebar.
+</Callout>
 
 ### Creating Sessions
 
@@ -158,20 +166,6 @@ The chat interface is fully responsive and optimized for mobile devices:
 - **Virtual keyboard**: the layout adjusts when the keyboard appears to keep the input visible
 
 All features work the same on mobile as on desktop. The tool timeline, markdown rendering, and file uploads are fully functional on small screens.
-
-## Customization
-
-### Message Display
-
-Messages are displayed with:
-- Clear visual distinction between user messages and Homun's responses
-- Timestamps on hover
-- Avatar icons for user and assistant
-- Read-more expansion for very long messages
-
-### Streaming Speed
-
-The streaming speed depends on your LLM provider and model. Faster models (like Claude Haiku or GPT-4o-mini) stream faster. The Web UI renders tokens as quickly as they arrive with no artificial delay.
 
 ## Troubleshooting
 

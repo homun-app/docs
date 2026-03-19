@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Web UI
 
 The Web UI is Homun's built-in browser interface. It runs as part of the gateway process — no extra installation, no separate server. When the gateway starts, the Web UI is automatically available at `https://localhost:18443`.
@@ -20,9 +22,11 @@ No additional configuration is required. The Web UI works out of the box.
 
 ## How It Works
 
-The Web UI is an Axum HTTP server with embedded static assets (CSS, JavaScript). All assets are compiled into the binary using `rust-embed`, so there are no external file dependencies.
+<Callout type="info">
+The chat interface uses a **WebSocket** connection for real-time, bidirectional communication. Responses stream token by token as the agent generates them, with no waiting for the full response.
+</Callout>
 
-The chat interface uses a **WebSocket** connection for real-time, bidirectional communication:
+The Web UI is an Axum HTTP server with embedded static assets (CSS, JavaScript). All assets are compiled into the binary using `rust-embed`, so there are no external file dependencies.
 
 ```
 Browser <-- WebSocket --> Axum server <-- MessageBus --> AgentLoop
@@ -117,6 +121,10 @@ By default, the Web UI is bound to `127.0.0.1` (localhost only). Access it at:
 On first access, your browser may show a security warning because of the self-signed TLS certificate. This is expected. Accept the warning to proceed.
 
 ### Remote Access
+
+<Callout type="warning">
+The Web UI always uses HTTPS. When accessing remotely, use a reverse proxy (nginx, Caddy, Tailscale) with proper TLS certificates for production use. Only enable `trust_x_forwarded_for` when running behind a **trusted** reverse proxy.
+</Callout>
 
 To access the Web UI from other devices on your network:
 
@@ -240,7 +248,9 @@ Appearance settings are available in the Account page.
 
 ## REST API
 
-The Web UI exposes **50+ REST API endpoints** under `/api/v1/`. These can be used for programmatic access, scripting, or building custom integrations:
+<Callout type="info">
+The Web UI exposes **50+ REST API endpoints** under `/api/v1/`. These can be used for programmatic access, scripting, or building custom integrations. All API endpoints require authentication (session cookie or API key), except `/api/v1/health`.
+</Callout>
 
 - `POST /api/v1/chat` — send a message (non-streaming)
 - `GET /api/v1/sessions` — list chat sessions
@@ -248,8 +258,6 @@ The Web UI exposes **50+ REST API endpoints** under `/api/v1/`. These can be use
 - `GET /api/v1/skills` — list installed skills
 - `GET /api/v1/memory/search?q=...` — search memory
 - `GET /api/v1/knowledge/search?q=...` — search knowledge base
-
-All API endpoints require authentication (session cookie or API key), except `/api/v1/health`.
 
 ## Troubleshooting
 
@@ -272,7 +280,9 @@ The rate limiter has blocked your IP. Wait one minute and try again. If you have
 sqlite3 ~/.homun/homun.db "DELETE FROM users;"
 ```
 
-Then restart the gateway and set a new password.
+<Callout type="warning">
+Resetting the password this way deletes all user records. After restarting the gateway, you will be prompted to create a new admin password.
+</Callout>
 
 ### Chat messages not streaming
 

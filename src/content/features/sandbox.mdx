@@ -1,3 +1,5 @@
+import { Callout, Tabs } from 'nextra/components'
+
 # Sandbox
 
 When Homun executes shell commands, they run inside an isolated sandbox by default. The sandbox prevents accidental damage to your system, limits what commands can access, and provides an audit trail of all executions. This is one of Homun's core safety features -- it ensures that even if the AI makes a mistake or a skill behaves unexpectedly, the impact is contained.
@@ -58,8 +60,10 @@ backend = "auto"    # auto, docker, native, bubblewrap, or windows
 | `enabled` | Boolean | `true` | Enable/disable sandboxing globally |
 | `backend` | String | `"auto"` | Which backend to use: `auto`, `docker`, `native`, `bubblewrap`, `windows` |
 
-## Docker Backend
+## Backend Details
 
+<Tabs items={['Docker', 'macOS (Native)', 'Linux (Bubblewrap)', 'Windows (Job Objects)']}>
+  <Tabs.Tab>
 Docker provides the strongest isolation. Commands run inside a container with:
 
 - No access to the host filesystem (except explicitly mounted directories)
@@ -104,11 +108,7 @@ backend = "docker"
 docker_image = "homun-sandbox:latest"    # Custom image
 ```
 
-If no custom image is specified, Homun uses a default lightweight image with:
-- Python 3
-- Node.js
-- Common Unix utilities (curl, jq, git, etc.)
-- A non-root user for execution
+If no custom image is specified, Homun uses a default lightweight image with Python 3, Node.js, and common Unix utilities.
 
 To build a custom sandbox image with additional tools:
 
@@ -117,22 +117,13 @@ FROM homun-sandbox:latest
 RUN apt-get update && apt-get install -y postgresql-client redis-tools
 ```
 
-### Docker Pros and Cons
+### Pros and Cons
 
-**Pros**:
-- Strongest isolation -- full container boundary
-- Works on all platforms (Linux, macOS, Windows)
-- Custom images let you pre-install required tools
-- Network can be fully isolated
+**Pros**: Strongest isolation, works on all platforms, custom images, network isolation.
 
-**Cons**:
-- Slower startup (~200-500ms per command for container creation)
-- Requires Docker to be installed and running
-- Uses more memory than native backends
-- Some system-level commands (e.g., hardware access) cannot work in a container
-
-## Native Backend (macOS)
-
+**Cons**: Slower startup (~200-500ms per command), requires Docker, uses more memory.
+  </Tabs.Tab>
+  <Tabs.Tab>
 On macOS, the native backend uses Apple's `sandbox-exec` for kernel-level restriction. No additional software is needed -- it is built into macOS.
 
 ### What Gets Restricted
@@ -145,21 +136,13 @@ On macOS, the native backend uses Apple's `sandbox-exec` for kernel-level restri
 
 Homun generates a sandbox profile (a set of rules in Apple's sandbox language) for each command execution. The profile specifies exactly which filesystem paths, network operations, and system calls are allowed.
 
-### Native Backend Pros and Cons
+### Pros and Cons
 
-**Pros**:
-- No extra software needed
-- Very fast (no container startup overhead)
-- Kernel-level enforcement (cannot be bypassed by the sandboxed process)
+**Pros**: No extra software needed, very fast, kernel-level enforcement.
 
-**Cons**:
-- macOS only
-- Less isolation than Docker (shares the host network by default)
-- Apple's sandbox profiles are complex and not well-documented
-- Some operations may be unexpectedly blocked
-
-## Bubblewrap Backend (Linux)
-
+**Cons**: macOS only, less isolation than Docker, some operations may be unexpectedly blocked.
+  </Tabs.Tab>
+  <Tabs.Tab>
 On Linux, Bubblewrap provides lightweight namespace-based isolation. It creates a new filesystem and process namespace for each command, similar to how Flatpak isolates applications.
 
 ### Setup
@@ -190,21 +173,13 @@ bwrap --version
 - **Network**: can be isolated (new network namespace) or shared
 - **Users**: runs as an unprivileged user inside the namespace
 
-### Bubblewrap Pros and Cons
+### Pros and Cons
 
-**Pros**:
-- Very fast (millisecond startup, no container overhead)
-- Strong isolation via Linux namespaces
-- No daemon required (unlike Docker)
-- Low resource usage
+**Pros**: Very fast (millisecond startup), strong namespace isolation, no daemon required, low resource usage.
 
-**Cons**:
-- Linux only
-- Requires kernel support for user namespaces (most modern kernels have this)
-- Less tooling and debugging support compared to Docker
-
-## Windows Job Objects Backend
-
+**Cons**: Linux only, requires kernel user namespace support.
+  </Tabs.Tab>
+  <Tabs.Tab>
 On Windows, the Job Objects backend uses Windows API process isolation. This is the weakest sandbox option but requires no additional software.
 
 ### What Gets Restricted
@@ -213,22 +188,17 @@ On Windows, the Job Objects backend uses Windows API process isolation. This is 
 - **Resources**: CPU and memory limits can be applied
 - **Filesystem**: limited restrictions (Windows Job Objects do not provide filesystem isolation)
 
-### Limitations
-
+<Callout type="warning">
 Windows Job Objects provide process-level restrictions but do not create filesystem or network isolation. For stronger isolation on Windows, use the Docker backend.
+</Callout>
 
-### Job Objects Pros and Cons
+### Pros and Cons
 
-**Pros**:
-- No extra software needed on Windows
-- Fast startup
-- Resource limits (CPU, memory) are enforced
+**Pros**: No extra software needed, fast startup, resource limits enforced.
 
-**Cons**:
-- Weakest isolation of all backends
-- No filesystem isolation
-- No network isolation
-- Commands can access host files and network
+**Cons**: Weakest isolation, no filesystem or network isolation.
+  </Tabs.Tab>
+</Tabs>
 
 ## Environment Injection
 
@@ -258,6 +228,10 @@ These logs are stored in the SQLite database and accessible from the Web UI unde
 
 ## When to Disable the Sandbox
 
+<Callout type="warning">
+Keep the sandbox enabled for everyday use. Only disable it when you trust the commands being executed and understand the implications. When the sandbox is disabled, all shell commands have full access to your system.
+</Callout>
+
 In some cases you may need to disable the sandbox:
 
 - **System administration**: commands that need full system access (installing packages, managing services)
@@ -279,8 +253,6 @@ Homun will ask for confirmation before running unsandboxed commands.
 [sandbox]
 enabled = false
 ```
-
-Keep the sandbox enabled for everyday use. Only disable it when you trust the commands being executed and understand the implications. When the sandbox is disabled, all shell commands have full access to your system.
 
 ## Troubleshooting
 
@@ -323,23 +295,8 @@ docker info
 2. For Docker: `docker_image = "your-custom-image:latest"` in config
 3. For native/bubblewrap: the host tools are usually available, so this is less common
 
-### Slow Execution with Docker
-
-**Symptom**: commands take noticeably longer than running directly.
-
-**Cause**: Docker container creation adds ~200-500ms overhead per command.
-
-**Mitigation**:
-- For frequent commands, consider using the native backend instead
-- Batch multiple operations into a single script to reduce container creation overhead
-- Pre-pull the sandbox image to avoid download delays on first run
-
 ### Sandbox Selection Verification
 
-To verify which sandbox backend is active:
-
-```bash
-RUST_LOG=debug homun gateway 2>&1 | grep -i sandbox
-```
-
-The logs show which backend was selected and why. If no backend is available, you will see a warning about running unsandboxed.
+<Callout type="info">
+To verify which sandbox backend is active, run `RUST_LOG=debug homun gateway 2>&1 | grep -i sandbox`. The logs show which backend was selected and why.
+</Callout>

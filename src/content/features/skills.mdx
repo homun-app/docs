@@ -1,3 +1,5 @@
+import { Callout, Steps, FileTree } from 'nextra/components'
+
 # Skills
 
 Skills extend Homun's capabilities through the open **Agent Skills** standard. Each skill is a self-contained package that teaches Homun how to handle a specific domain -- from checking the weather to managing your calendar to interacting with third-party APIs. Skills are portable across any AI assistant that supports the Agent Skills specification.
@@ -18,6 +20,10 @@ The Agent Skills standard is an open specification. Skills you create for Homun 
 - **Community**: share skills through GitHub, ClawHub, or OpenSkills registries
 - **No code changes**: adding a skill does not require recompiling Homun
 - **Hot-reload**: skills are picked up within seconds of being added, no restart needed
+
+<Callout type="info">
+Skills hot-reload automatically. When you add, modify, or remove a skill file, Homun detects the change within seconds via file watcher and updates the available skills without a gateway restart.
+</Callout>
 
 ## Skill Directories
 
@@ -149,17 +155,20 @@ Go to **Skills** to see all installed skills, their descriptions, trigger condit
 
 A minimal skill requires only a `SKILL.md` file. A full skill with executable scripts looks like this:
 
-```
-my-skill/
-  SKILL.md               # Required: skill definition
-  scripts/
-    run.py               # Optional: executable script (Python)
-    helpers.sh           # Optional: helper scripts (Bash)
-    process.js           # Optional: Node.js script
-  data/
-    templates.json       # Optional: data files
-  README.md              # Optional: documentation
-```
+<FileTree>
+  <FileTree.Folder name="my-skill" defaultOpen>
+    <FileTree.File name="SKILL.md" />
+    <FileTree.Folder name="scripts" defaultOpen>
+      <FileTree.File name="run.py" />
+      <FileTree.File name="helpers.sh" />
+      <FileTree.File name="process.js" />
+    </FileTree.Folder>
+    <FileTree.Folder name="data">
+      <FileTree.File name="templates.json" />
+    </FileTree.Folder>
+    <FileTree.File name="README.md" />
+  </FileTree.Folder>
+</FileTree>
 
 Scripts can be written in Python, Bash, or JavaScript. They are executed via the `shell` tool inside the sandbox, with environment variables injected from the vault.
 
@@ -252,14 +261,6 @@ Understanding the lifecycle helps you write better skills and debug issues.
 
 Homun scans all skill directories and parses each `SKILL.md` file. At this stage, only the frontmatter is read -- the body is not loaded into memory. This "progressive disclosure" approach keeps startup fast even with hundreds of skills installed.
 
-The loader validates:
-- YAML frontmatter is well-formed
-- Required fields (`name`, `description`) are present
-- No duplicate skill names across directories (higher-priority directory wins)
-- Version string is valid semver (if provided)
-
-If a `SKILL.md` has invalid YAML or missing required fields, it is skipped with a warning in the logs. Other skills load normally.
-
 ### 2. Eligibility Check
 
 Before each conversation turn, Homun checks which skills are eligible based on:
@@ -267,7 +268,9 @@ Before each conversation turn, Homun checks which skills are eligible based on:
 - **Environment**: are all required `env` variables present in the vault?
 - **Enabled**: is the skill enabled (not manually disabled by the user)?
 
-Ineligible skills are silently skipped -- they do not appear in the agent's context. If a skill is ineligible because of missing env variables, Homun logs a warning with the variable name so you can fix it.
+<Callout type="warning">
+If a required env variable is not in the vault, the skill is marked as ineligible and will not activate. Check `homun skills list` to see which skills are disabled and why.
+</Callout>
 
 ### 3. Invocation
 
@@ -327,7 +330,9 @@ If `tools` is omitted, all tools are available. For security-sensitive skills, a
 
 ## Skill Marketplace
 
-Discover and install community skills from two registries.
+<Callout type="info">
+Discover and install community skills from two registries: ClawHub and OpenSkills. Browse from the Web UI under **Skills > Marketplace** or search from the CLI with `homun skills search`.
+</Callout>
 
 ### ClawHub
 
@@ -412,13 +417,14 @@ deploy-helper   0.5.0    local    disabled (missing env: DEPLOY_TOKEN)
 
 Here is a step-by-step walkthrough for creating a weather skill that uses the OpenWeatherMap API.
 
-### Step 1: Create the Directory
+<Steps>
+### Create the Directory
 
 ```bash
 mkdir -p ~/.homun/skills/weather/scripts
 ```
 
-### Step 2: Write the Script
+### Write the Script
 
 Create `~/.homun/skills/weather/scripts/fetch.py`:
 
@@ -458,7 +464,7 @@ Make it executable:
 chmod +x ~/.homun/skills/weather/scripts/fetch.py
 ```
 
-### Step 3: Write the SKILL.md
+### Write the SKILL.md
 
 Create `~/.homun/skills/weather/SKILL.md`:
 
@@ -487,13 +493,13 @@ When the user asks about the weather:
 Always include the "feels like" temperature alongside the actual temperature.
 ```
 
-### Step 4: Store the API Key
+### Store the API Key
 
 ```bash
 homun vault set OWM_API_KEY "your-openweathermap-api-key"
 ```
 
-### Step 5: Verify the Skill Loaded
+### Verify the Skill Loaded
 
 ```bash
 homun skills list
@@ -501,13 +507,14 @@ homun skills list
 
 You should see `weather` in the list with status `active`.
 
-### Step 6: Test
+### Test
 
 ```bash
 homun chat -m "What's the weather in Rome?"
 ```
 
 Homun will activate the weather skill, run the script, and present the results.
+</Steps>
 
 ## LLM-Driven Skill Generation
 

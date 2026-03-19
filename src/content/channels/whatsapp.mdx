@@ -1,3 +1,5 @@
+import { Callout, Steps } from 'nextra/components'
+
 # WhatsApp
 
 Connect Homun to WhatsApp using a native Rust integration. No external bridge, no Node.js, no third-party API service. Homun connects directly to WhatsApp Web using the [wa-rs](https://github.com/nickelc/wa-rs) library, a pure Rust implementation of the WhatsApp Web protocol.
@@ -6,15 +8,38 @@ This means Homun appears as a linked device on your WhatsApp account — just li
 
 ## Quick Setup
 
-1. Enable WhatsApp in `~/.homun/config.toml`
-2. Run `homun gateway`
-3. Open the Web UI and go to Channels > WhatsApp
-4. Click **Pair** and scan the QR code with your phone
-5. Start messaging — Homun responds to incoming messages on your WhatsApp number
+<Steps>
+### Step 1: Enable WhatsApp
+
+Add the WhatsApp channel to `~/.homun/config.toml`:
+
+```toml
+[channels.whatsapp]
+enabled = true
+```
+
+### Step 2: Start the Gateway
+
+```bash
+homun gateway
+```
+
+### Step 3: Pair via QR Code
+
+Open the Web UI and go to **Channels** > **WhatsApp**. Click **Pair** and scan the QR code with your phone (WhatsApp > Settings > Linked Devices > Link a Device).
+
+### Step 4: Start Messaging
+
+Homun responds to incoming messages on your WhatsApp number.
+</Steps>
 
 ## How It Works
 
-Homun uses the WhatsApp Web multi-device protocol. When you pair via QR code, your phone registers Homun as a linked device. From that point on:
+<Callout type="info">
+Homun uses the WhatsApp Web multi-device protocol. Your phone does **not** need to be online for Homun to receive messages — they are delivered directly from WhatsApp servers.
+</Callout>
+
+When you pair via QR code, your phone registers Homun as a linked device. From that point on:
 
 - Homun receives all incoming messages directly from WhatsApp servers (no phone relay needed)
 - Session credentials are stored in a local SQLite database (`~/.homun/whatsapp.db` by default)
@@ -35,14 +60,25 @@ No intermediary process, no Node.js bridge, no external service.
 
 This is the recommended pairing method:
 
-1. Start the gateway: `homun gateway`
-2. Open the Web UI (default: `https://localhost:18443`)
-3. Navigate to **Channels** > **WhatsApp**
-4. Click **Pair** — a QR code appears on screen
-5. On your phone: open WhatsApp > **Settings** > **Linked Devices** > **Link a Device**
-6. Scan the QR code
-7. Wait for the connection to establish (usually 5-10 seconds)
-8. The Web UI shows "Connected"
+<Steps>
+### Step 1: Start the Gateway
+
+```bash
+homun gateway
+```
+
+### Step 2: Open the Web UI
+
+Navigate to `https://localhost:18443` and go to **Channels** > **WhatsApp**.
+
+### Step 3: Scan the QR Code
+
+Click **Pair** — a QR code appears on screen. On your phone: open WhatsApp > **Settings** > **Linked Devices** > **Link a Device**. Scan the QR code.
+
+### Step 4: Wait for Connection
+
+Wait for the connection to establish (usually 5-10 seconds). The Web UI shows "Connected".
+</Steps>
 
 ### Phone Number Pairing
 
@@ -181,11 +217,9 @@ Long responses are automatically split into chunks at newline boundaries. Each c
 
 ## Re-Pairing
 
-You need to re-pair when:
-
-- You manually unlinked the device from your phone (WhatsApp Settings > Linked Devices > remove the device)
-- Your phone was offline for more than 14 days (WhatsApp's linked device timeout)
-- The session database was deleted or corrupted
+<Callout type="warning">
+You need to re-pair when your device has been unlinked. This can happen if you manually removed it from WhatsApp Settings, your phone was offline for more than 14 days, or the session database was deleted or corrupted.
+</Callout>
 
 When the session is invalid, the gateway logs:
 
@@ -204,10 +238,10 @@ The gateway includes an automatic reconnect loop with exponential backoff (2s, 4
 
 ## Multi-Device Considerations
 
-WhatsApp's multi-device architecture means:
+<Callout type="info">
+WhatsApp's multi-device architecture means your phone does not need to be online for Homun to receive messages. Messages are delivered directly from WhatsApp servers. Linked devices share end-to-end encryption keys with your phone during pairing.
+</Callout>
 
-- **Your phone does not need to be online** for Homun to receive messages. Messages are delivered directly from WhatsApp servers.
-- **Linked devices share end-to-end encryption keys** with your phone during pairing.
 - **Maximum 4 linked devices** per WhatsApp account. Homun counts as one.
 - **14-day inactivity limit**: if your phone does not connect to the internet for 14 days, linked devices (including Homun) are automatically unlinked.
 - **Message history**: by default, WhatsApp syncs recent message history to new linked devices. Use `skip_history_sync = true` to prevent Homun from processing old messages during initial pairing.
@@ -251,7 +285,9 @@ The WebSocket connection to WhatsApp servers was lost. This can happen due to:
 - WhatsApp server maintenance
 - Session token expiration
 
+<Callout type="info">
 The bot reconnects automatically with exponential backoff. If the error persists after several minutes, check your internet connection.
+</Callout>
 
 ### "WhatsApp logged out"
 
