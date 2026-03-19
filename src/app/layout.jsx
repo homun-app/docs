@@ -25,7 +25,7 @@ const navbar = (
         🧪 Homun
       </span>
     }
-    projectLink="https://github.com/homunbot/homunbot"
+    projectLink="https://github.com/homun-app/homun"
   />
 )
 
@@ -47,7 +47,7 @@ export default async function RootLayout({ children }) {
         <Layout
           navbar={navbar}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/homunbot/homun-docs/tree/main/src/content"
+          docsRepositoryBase="https://github.com/homun-app/docs/tree/main/src/content"
           footer={footer}
           sidebar={{ defaultMenuCollapseLevel: 1 }}
           editLink="Edit this page on GitHub"
