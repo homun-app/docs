@@ -1,51 +1,80 @@
 # Discord
 
-Connect Homun to Discord as a bot that responds in DMs and server channels.
+Connect Homun to Discord as a bot that responds in direct messages and server channels. Homun uses the [Serenity](https://github.com/serenity-rs/serenity) library, a mature Rust framework for the Discord API, with support for gateway intents, auto-reconnect, and rich message formatting.
 
-## Setup
+## Quick Setup
+
+1. Create a Discord application at the Developer Portal
+2. Create a bot user and copy the token
+3. Enable the Message Content intent
+4. Invite the bot to your server
+5. Add the token to `~/.homun/config.toml`
+6. Run `homun gateway`
+
+## Step-by-Step Bot Creation
 
 ### 1. Create a Discord Application
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click **New Application** and give it a name
-3. Go to the **Bot** section
-4. Click **Reset Token** and copy the bot token
+2. Click **New Application**
+3. Give it a name (e.g., "Homun") and accept the terms
+4. On the General Information page, note the **Application ID** — you will need it for the invite URL
 
-### 2. Enable Message Content Intent
+### 2. Create a Bot User
 
-Still in the Bot section:
+1. In the left sidebar, click **Bot**
+2. Click **Reset Token** and copy the bot token. Keep this secret.
+3. Under **Authorization Flow**, uncheck **Public Bot** if you do not want others to add your bot to their servers
 
-1. Scroll down to **Privileged Gateway Intents**
-2. Enable **Message Content Intent**
-3. Save changes
+### 3. Enable Privileged Gateway Intents
 
-This is required for the bot to read message content.
+Still on the Bot page, scroll down to **Privileged Gateway Intents** and enable:
 
-### 3. Invite the Bot to Your Server
+- **Message Content Intent** — required for the bot to read message text. Without this, the bot receives empty messages.
+
+The bot uses three intents internally:
+
+| Intent | Purpose |
+|---|---|
+| `GUILD_MESSAGES` | Receive messages in server channels |
+| `DIRECT_MESSAGES` | Receive direct messages |
+| `MESSAGE_CONTENT` | Read the actual text content of messages |
+
+### 4. Generate an Invite URL
 
 1. Go to **OAuth2** > **URL Generator**
-2. Select the `bot` scope
-3. Under Bot Permissions, select:
+2. Under **Scopes**, select `bot`
+3. Under **Bot Permissions**, select:
    - Send Messages
    - Read Message History
    - Attach Files
    - Embed Links
+   - Add Reactions
 4. Copy the generated URL and open it in your browser
-5. Select your server and authorize
+5. Select your server and click **Authorize**
 
-### 4. Configure Homun
+The bot appears in your server's member list as offline until the gateway starts.
 
-Add to `~/.homun/config.toml`:
+### 5. Configure Homun
+
+Add the bot token to `~/.homun/config.toml`:
 
 ```toml
 [channels.discord]
 token = "your-bot-token-here"
 ```
 
-### 5. Start the Gateway
+### 6. Start the Gateway
 
 ```bash
 homun gateway
+```
+
+You should see:
+
+```
+INFO Discord bot connected user=Homun bot_id=123456789012345678
+INFO Discord: cache ready, guilds loaded guild_count=1
 ```
 
 The bot appears online in your server and responds to mentions and DMs.
@@ -57,21 +86,206 @@ The bot appears online in your server and responds to mentions and DMs.
 # Bot token from Developer Portal (required)
 token = "your-bot-token-here"
 
-# Restrict to specific guild (server) IDs (optional)
-allowed_guilds = [123456789012345678]
+# Restrict to specific Discord user IDs (optional)
+# If empty and pairing_required is false, anyone in the server can interact
+allow_from = ["123456789012345678"]
 
-# Command prefix for non-mention messages (optional, default: "!")
-command_prefix = "!"
+# Default channel ID for proactive/cross-channel messaging (optional)
+# Without this, Discord can only reply to incoming messages
+default_channel_id = "1234567890123456789"
+
+# Require OTP pairing for unknown senders (default: false)
+pairing_required = false
+
+# In guilds, only respond when @mentioned (default: true)
+mention_required = true
+
+# Response mode: automatic, assisted, on_demand, silent (default: automatic)
+response_mode = "automatic"
+
+# Persona: bot, owner, company, custom (default: bot)
+persona = "bot"
+
+# Default tone of voice for this channel
+tone_of_voice = ""
+
+# Channel to send draft notifications when in assisted mode
+# notify_channel = "web"
+# notify_chat_id = ""
+
+# Named agent to handle messages (empty = default agent)
+# default_agent = ""
 ```
 
-## Usage
+### Configuration Options
 
-- **DM**: send a direct message to the bot
-- **Server**: mention the bot (`@Homun what time is it?`) or use the command prefix (`!what time is it?`)
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `token` | String | (required) | Bot token from the Developer Portal |
+| `allow_from` | Array of strings | `[]` | Discord user IDs allowed to interact. Empty = allow anyone (or use pairing) |
+| `default_channel_id` | String | `""` | Channel ID for proactive messages. Required for automations/cron to send to Discord |
+| `pairing_required` | Boolean | `false` | Require OTP verification for unknown senders |
+| `mention_required` | Boolean | `true` | In servers, only respond when @mentioned |
+| `response_mode` | String | `"automatic"` | How the agent handles messages |
+| `persona` | String | `"bot"` | How the agent presents itself |
+| `tone_of_voice` | String | `""` | Default communication style |
+| `notify_channel` | String | (none) | Where to send drafts in assisted mode |
+| `notify_chat_id` | String | (none) | Chat ID on the notify channel |
+
+### Finding Discord IDs
+
+To get user IDs, channel IDs, or server IDs:
+
+1. Open Discord Settings > Advanced > enable **Developer Mode**
+2. Right-click any user, channel, or server
+3. Click **Copy ID**
 
 ## Features
 
-- Text messages and file attachments
-- Markdown formatting in responses
-- Embed support for rich responses
-- Auto-reconnect on connection drops
+### Message Handling
+
+When a Discord message arrives:
+
+1. The bot sends a **typing indicator** in the channel
+2. The agent processes the message with full tool access
+3. The response is sent back as a text message
+4. A checkmark reaction is added to the original message to acknowledge receipt
+
+### Direct Messages vs Server Messages
+
+| Behavior | DM | Server Channel |
+|---|---|---|
+| Mention required | No (always responds) | Yes (when `mention_required = true`) |
+| Typing indicator | Yes | Yes |
+| Acknowledgment reaction | Yes | Yes |
+| Thread routing | No | Yes (via metadata) |
+
+In DMs, the bot responds to every message. In server channels, the default behavior is to only respond when @mentioned.
+
+### Mention Handling
+
+When the bot is @mentioned in a server channel, the mention tag (`<@BOT_ID>` or `<@!BOT_ID>`) is automatically stripped from the message before processing. So if a user writes:
+
+```
+@Homun what time is it?
+```
+
+The agent sees: `what time is it?`
+
+### File Attachments
+
+The bot downloads the first attachment from any message and passes it to the agent:
+
+- Images (PNG, JPEG, GIF, WebP)
+- Documents (PDF, TXT, CSV, etc.)
+- Any other file type Discord supports
+
+Files are saved to a temp directory (`/tmp/homun_discord/`) with their original filename. If a message has an attachment but no text, the filename is used as the message content.
+
+### Bot Commands
+
+The bot recognizes these commands:
+
+| Command | Action |
+|---|---|
+| `!start` | Sends a welcome message |
+| `!new` | Clears the current session |
+| `!reset` | Same as `!new` |
+
+### Long Message Handling
+
+Discord has a 2,000 character limit per message. Homun automatically splits longer responses at newline boundaries, keeping each chunk under 1,900 characters.
+
+### Thread Routing
+
+Outbound messages support thread routing via metadata. When the agent's response includes a `thread_id` in its metadata, the message is sent to that specific thread instead of the main channel. This enables proactive messaging to specific threads from automations or cross-channel routing.
+
+### Proactive Messaging
+
+When `default_channel_id` is configured, Homun can send proactive messages to Discord (e.g., from automations, cron jobs, or cross-channel routing). Without it, the bot can only reply to incoming messages.
+
+### Auto-Reconnect
+
+Serenity handles Discord gateway reconnection automatically. If the WebSocket connection drops, it reconnects and resumes the session. The bot logs:
+
+```
+INFO Discord: session resumed after reconnect
+```
+
+## Server Permissions
+
+### Required Bot Permissions
+
+At minimum, the bot needs:
+
+- **Send Messages** — to respond to users
+- **Read Message History** — to process messages in context
+- **Add Reactions** — to acknowledge messages with checkmark
+
+For full functionality, also grant:
+
+- **Attach Files** — if the agent needs to send files
+- **Embed Links** — for rich URL previews in responses
+
+### Role Hierarchy
+
+The bot's role must be positioned correctly in the server's role hierarchy:
+
+- The bot can only interact in channels its role has access to
+- If a channel has specific permission overrides, make sure the bot role is included
+- The bot cannot manage messages or users with roles higher than its own
+
+## Security
+
+### Restricting Access
+
+Use `allow_from` to limit which Discord users can interact with the bot:
+
+```toml
+allow_from = ["123456789012345678", "987654321098765432"]
+```
+
+When `allow_from` is empty and `pairing_required` is false, any user in the server can message the bot.
+
+### Pairing
+
+When `pairing_required = true`, unknown senders receive a 6-digit OTP code in the gateway logs. They must send it back to verify their identity. Once paired, they are remembered permanently.
+
+### Bot Messages Ignored
+
+The bot automatically ignores all messages from other bots (including itself) by checking the `author.bot` flag. This prevents infinite loops between bots.
+
+## Troubleshooting
+
+### Bot appears offline in server
+
+1. Check that the gateway is running: `homun gateway`
+2. Check the token is correct in `config.toml`
+3. Check the logs for connection errors
+4. Verify the bot was invited to the server (check OAuth2 URL)
+
+### Bot does not respond to messages
+
+1. **Check Message Content Intent**: in the Developer Portal > Bot > Privileged Gateway Intents, verify **Message Content Intent** is enabled. Without it, the bot receives empty messages.
+2. **Check mention_required**: if `true`, you must @mention the bot in server channels
+3. **Check allow_from**: if set, verify your Discord user ID is in the list
+4. **Check pairing**: if `pairing_required = true`, check gateway logs for the OTP code
+
+### "Failed to create Discord client"
+
+The bot token is invalid or has been reset. Go to the Developer Portal, create a new token, and update `config.toml`.
+
+### Bot responds to everything in the server
+
+Set `mention_required = true` (the default) to only respond when @mentioned. If it is already `true`, check that `allow_from` is configured to restrict who can interact.
+
+### Messages are cut off
+
+Discord's 2,000 character limit is handled automatically. If messages still appear cut off, check the agent's response length in the logs. Very long responses (10,000+ characters) result in many split messages.
+
+## Tips and Best Practices
+
+- **Enable Developer Mode** in Discord (Settings > Advanced) to easily copy user IDs, channel IDs, and server IDs.
+- **Set `default_channel_id`** if you want to use automations or cron jobs that send messages to Discord.
+- **Use a dedicated channel** for the bot in your server (e.g., `#homun`) to keep bot interactions separate from regular conversations.
+- **Keep `mention_required = true`** in server channels to avoid the bot responding to every message.

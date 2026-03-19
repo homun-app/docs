@@ -1,73 +1,471 @@
 # Memory & Knowledge
 
-Homun has a multi-layered memory system that lets it remember context across conversations and search through your documents.
+Homun has a multi-layered memory system that gives it context across conversations, a persistent user profile, and a searchable knowledge base for your documents. Together, these layers let Homun remember who you are, what you have discussed, and reference your documents -- without you having to repeat yourself.
 
-## Memory Layers
+## Memory Architecture
 
-### Short-Term Memory
+Homun's memory is organized into three distinct layers, each serving a different purpose:
 
-Session messages are kept in memory during a conversation. When you start a new session, previous messages are no longer in context but remain stored in the database for search.
+| Layer | What It Stores | Lifetime | Storage |
+|-------|---------------|----------|---------|
+| Short-term (session) | Current conversation messages | Until session ends | In-memory + SQLite |
+| Long-term (consolidated) | Important information from past conversations | Permanent | SQLite + daily `.md` files |
+| User profile | Facts about you (preferences, identity, habits) | Permanent | `~/.homun/brain/USER.md` |
 
-### Long-Term Memory
+A fourth system, the **Knowledge Base (RAG)**, handles document storage and retrieval. While related to memory, it operates independently with its own ingestion pipeline and search index.
 
-Homun periodically consolidates important information from conversations into long-term memory summaries. These are stored in the database and searched automatically during future conversations to provide relevant context.
+All memory layers work together automatically. When you ask Homun a question, it searches short-term context first, then long-term memory, then the knowledge base, combining results to give the most informed answer possible.
 
-Daily memory files are written to `~/.homun/memory/YYYY-MM-DD.md`.
+## Short-Term Memory
 
-### User Profile
+Short-term memory is the current conversation context. When you chat with Homun, all messages in the active session are held in memory and included in the LLM context window.
 
-Homun maintains a profile about you at `~/.homun/brain/USER.md`. This file is updated through the `remember` tool -- when you tell Homun something important about yourself, it stores it here.
+### How It Works
 
-The user profile is included in every conversation to help Homun personalize its responses.
+- Messages are stored in-memory for fast access during the conversation
+- They are also persisted to the SQLite database (`~/.homun/homun.db`) for durability
+- When you start a new session, previous session messages leave the active context
+- Old sessions remain searchable in the database -- they are not deleted
+
+Short-term memory is the most immediate layer. The LLM sees every message in the current session, so it has full context of the ongoing conversation.
+
+### Session Limits
+
+The LLM has a finite context window (e.g., 200K tokens for Claude, 128K for GPT-4). When a conversation grows very long, Homun manages context by:
+
+1. Keeping the most recent messages in full
+2. Summarizing older messages to save space
+3. Including relevant memories from the long-term layer
+4. Including relevant knowledge base results when the query matches
+
+You do not need to manage this manually. Homun handles context window management transparently. If you notice Homun losing context in very long conversations, starting a new session gives it a fresh window while long-term memory preserves the important facts.
+
+### Viewing Past Sessions
+
+Past sessions are accessible from:
+- **Web UI**: click any session in the sidebar to view its full history
+- **API**: `GET /api/v1/sessions` to list sessions, `GET /api/v1/sessions/:id/messages` to read messages
+- **CLI**: sessions from CLI mode are also stored in the database
+
+Each session records:
+- All messages (user and assistant)
+- Tool calls and their results
+- Timestamps
+- Channel of origin (CLI, Web, Telegram, etc.)
+
+## Long-Term Memory
+
+Homun periodically consolidates important information from conversations into long-term memory. This happens automatically -- you do not need to tell Homun to remember things (though you can).
+
+### Consolidation Process
+
+After a conversation ends or at natural breaks, Homun runs a consolidation step:
+
+1. The LLM reviews recent messages for information worth remembering
+2. Important facts, decisions, preferences, and context are extracted
+3. These are stored as structured memory entries in the `memories` table in SQLite
+4. Entries are tagged with metadata (timestamp, topic, source session)
+5. Each entry is also embedded as a vector for semantic search
+
+Consolidation runs on a configurable interval (default: every hour when the gateway is active). It processes conversations that have not yet been consolidated.
+
+### Daily Memory Files
+
+Consolidated memories are also written to daily files at `~/.homun/memory/YYYY-MM-DD.md`. These are human-readable summaries you can browse:
+
+```
+~/.homun/memory/
+  2025-01-15.md
+  2025-01-16.md
+  2025-01-17.md
+```
+
+Each file contains the memories consolidated on that date, formatted as markdown. You can read these files directly to see what Homun remembers from each day.
+
+Do not edit these files -- Homun manages them automatically. If you want to correct a memory, use the Memory page in the Web UI or tell Homun directly.
+
+### What Gets Remembered
+
+The consolidation process prioritizes:
+- Decisions you made and their reasoning
+- Preferences you expressed ("I prefer dark mode", "Send me updates on Telegram")
+- Facts about your projects, work, and interests
+- Important dates and deadlines mentioned
+- Instructions you gave Homun about how to behave
+- Outcomes of tasks Homun completed for you
+- Contact information and relationships mentioned
+
+It does not remember:
+- Small talk and pleasantries
+- Questions with no lasting value (e.g., "What time is it?")
+- Repeated information already in memory
+- Transient technical details (e.g., exact error messages from debugging sessions)
+
+### Manual Memory Management
+
+You can explicitly tell Homun to remember or forget things:
+
+**Remember**: tell Homun something important:
+> "Remember that our deployment window is Tuesdays 2-4 PM"
+
+Homun stores this in long-term memory immediately, without waiting for automatic consolidation.
+
+**Forget**: ask Homun to remove a memory:
+> "Forget the old deployment window -- we changed it"
+
+From the Web UI, go to **Memory** to browse, search, edit, or delete individual memories.
+
+## User Profile
+
+The user profile at `~/.homun/brain/USER.md` is a persistent file that stores key facts about you. It is included in every conversation's system prompt, giving Homun consistent context about who you are.
+
+### How It Gets Updated
+
+The user profile is **only written by the `remember` tool**. When you tell Homun something important about yourself, the agent uses this tool to save it:
+
+> "Remember that I'm a backend developer working with Rust and Python"
+
+Homun writes this to `USER.md` and includes it in all future conversations. The remember tool is smart about updates -- it adds new information, updates changed facts, and avoids duplicates.
+
+### What It Contains
+
+A typical `USER.md` might look like:
+
+```markdown
+## About
+- Backend developer, primarily Rust and Python
+- Based in Milan, Italy
+- Works at Acme Corp on the platform team
+
+## Preferences
+- Prefers concise responses over verbose ones
+- Likes code examples in explanations
+- Preferred communication: Telegram for urgent, email for reports
+
+## Current Projects
+- Migrating auth service from Python to Rust
+- Setting up CI/CD pipeline with GitHub Actions
+
+## Important Contacts
+- Maria: project manager, available on Slack
+- Jake: DevOps lead, handles production deployments
+```
+
+### Manual Editing
+
+You can edit `USER.md` directly in a text editor or from the **Memory** page in the Web UI. Changes are picked up immediately via hot-reload. This is useful for bulk updates or corrections.
+
+The file is plain markdown. Use whatever structure works for you -- Homun reads the entire file into context.
+
+### Related Files
+
+| File | Purpose | Edited By |
+|------|---------|-----------|
+| `~/.homun/brain/USER.md` | User profile facts | `remember` tool or manual editing |
+| `~/.homun/brain/INSTRUCTIONS.md` | Behavioral instructions Homun has learned | Automatic consolidation |
+| `~/.homun/brain/SOUL.md` | Agent personality definition | User (manual edit only) |
+
+**SOUL.md** defines Homun's personality and communication style. Edit it to change how Homun speaks and behaves. For example, you could make Homun more formal, more casual, use specific vocabulary, or adopt a particular tone. This file is never modified automatically -- only you can change it.
+
+**INSTRUCTIONS.md** captures behavioral patterns Homun has learned from your interactions. For example, if you consistently tell Homun to run tests after code changes, it may learn to do that automatically. These instructions are consolidated from conversations, not written directly.
+
+### File Sizes and Context Impact
+
+All brain files are included in every conversation's system prompt. Keep them concise:
+- **USER.md**: aim for 50-200 lines. Focus on facts that are relevant across conversations.
+- **SOUL.md**: aim for 10-50 lines. A few paragraphs about personality and tone.
+- **INSTRUCTIONS.md**: grows organically. Homun prunes redundant instructions during consolidation.
+
+Very large brain files consume tokens from the LLM's context window, leaving less room for the actual conversation.
 
 ## Memory Search
 
-When you ask Homun a question, it automatically searches its memory using a hybrid approach:
+When you ask Homun a question, it automatically searches its memory for relevant context. This happens transparently -- you do not need to tell Homun to search.
 
-- **Vector search** (HNSW) -- finds semantically similar memories
-- **Full-text search** (FTS5) -- finds exact keyword matches
-- **RRF scoring** -- combines both results for best relevance
+### Hybrid Search Algorithm
 
-You can also manage memory through the Web UI under **Memory**, where you can browse, search, and edit stored memories.
+Memory search uses a two-strategy approach for best results:
 
-## Knowledge Base (RAG)
+**Vector Search (HNSW)**
+- Converts your query into a dense embedding vector
+- Searches for semantically similar memories using an HNSW (Hierarchical Navigable Small World) index
+- Finds memories that are conceptually related, even if they use different words
+- Example: searching for "authentication" finds memories about "login", "OAuth", "JWT"
 
-The knowledge base lets you ingest documents so Homun can reference them during conversations.
+**Full-Text Search (FTS5)**
+- Uses SQLite's FTS5 extension for keyword matching
+- Finds memories containing exact words or phrases
+- Handles stemming, prefix matching, and boolean operators
+- Example: searching for "deploy" also matches "deployment", "deployed"
 
-### Supported Formats
+**Reciprocal Rank Fusion (RRF)**
+- Combines results from both search strategies
+- Each result gets a score based on its rank in each strategy's results
+- The combined score surfaces memories that rank well in both approaches
+- This hybrid approach consistently outperforms either strategy alone
 
-Homun supports 30+ document formats:
+The search runs automatically when the agent processes your message. It retrieves the top-ranked memories and includes them in the LLM context alongside your message. The agent then uses this context to inform its response.
 
-| Category | Formats |
-|----------|---------|
-| Documents | Markdown, PDF, DOCX, TXT |
-| Spreadsheets | XLSX, CSV |
-| Code | Python, JavaScript, Rust, Go, and more |
-| Web | HTML |
+### When Memory Search Activates
 
-### Ingesting Documents
+Memory search runs on most messages, but not all. The agent decides whether a query would benefit from memory context. Simple greetings or direct commands (like "list my files") typically skip the memory search to save latency.
 
-Upload documents through the Web UI under **Knowledge**, or use the knowledge tool during a conversation:
+### Embedding Providers
 
-```
-"Ingest this PDF into your knowledge base"
-```
+Homun supports two embedding providers for vector search:
 
-Homun chunks the document, generates embeddings, and indexes it for search.
+| Provider | Type | Model | Dimensions | Speed | Cost |
+|----------|------|-------|:----------:|:-----:|:----:|
+| fastembed | Local | all-MiniLM-L6-v2 | 384 | Fast, no network | Free |
+| openai | Cloud | text-embedding-3-small | 1536 | Requires API key | Per-token |
 
-### Directory Watcher
+Default is `fastembed` (local). The model loads into memory (~100-300 MB) on first use. Once loaded, embeddings are generated in milliseconds with no network calls.
 
-Point Homun at a directory and it will automatically ingest new or updated files:
+OpenAI embeddings are higher-dimensional and may produce slightly better semantic search results, but they require an API key and incur per-token costs.
 
 ```toml
 [knowledge]
-watch_dirs = ["~/Documents/notes"]
+embedding_provider = "fastembed"    # or "openai"
 ```
+
+Changing the embedding provider requires re-indexing all existing memories and knowledge base documents, since the vector dimensions differ. Homun handles this automatically but it takes time for large datasets.
+
+### Manual Memory Search
+
+From the Web UI, go to **Memory** to browse and search all stored memories. You can:
+- Search by keyword or natural language query
+- View memory entries with their source session and timestamp
+- Edit or delete individual memories
+- See which session a memory originated from
+
+## Knowledge Base (RAG)
+
+The Knowledge Base uses Retrieval-Augmented Generation (RAG) to let Homun reference your documents during conversations. Upload a PDF, codebase, or folder of notes, and Homun can search and cite them when answering questions.
+
+### How RAG Works
+
+1. **Ingest**: you upload a document (or Homun watches a directory for new files)
+2. **Chunk**: the document is split into smaller pieces (500-1000 tokens each)
+3. **Embed**: each chunk is converted to a vector embedding
+4. **Index**: chunks are stored in both a vector index (HNSW) and a text index (FTS5)
+5. **Search**: when you ask a question, Homun searches the index for relevant chunks
+6. **Augment**: matching chunks are included in the LLM context alongside your question
+7. **Generate**: the LLM answers your question using the retrieved context
+
+This process is automatic. You just need to ingest your documents; the rest happens behind the scenes.
+
+### Supported Formats
+
+Homun supports 30+ document formats across multiple categories:
+
+| Category | Formats |
+|----------|---------|
+| Documents | Markdown (`.md`), Plain text (`.txt`), PDF (`.pdf`), Word (`.docx`), Rich Text (`.rtf`) |
+| Spreadsheets | Excel (`.xlsx`), CSV (`.csv`), TSV (`.tsv`) |
+| Code | Python, JavaScript, TypeScript, Rust, Go, Java, C/C++, Ruby, PHP, Shell, SQL, YAML, JSON, TOML, HTML, CSS, and more |
+| Web | HTML (`.html`, `.htm`) |
+| Data | JSON (`.json`), XML (`.xml`) |
+
+Code files are chunked intelligently -- by function, class, or logical section rather than by raw character count. This preserves the semantic meaning of code blocks.
+
+### Ingesting Documents
+
+**Web UI**: go to **Knowledge**, drag and drop files, or click **Upload**. You can upload multiple files at once.
+
+**Chat**: ask Homun to ingest a file:
+
+> "Add ~/Documents/project-spec.pdf to your knowledge base"
+
+**CLI**: use the knowledge tool:
+
+```bash
+homun chat -m "Ingest all markdown files from ~/Projects/docs/"
+```
+
+**API**:
+
+```bash
+curl -X POST https://localhost:18443/api/v1/knowledge/ingest \
+  -H "Authorization: Bearer wh_your_token" \
+  -F "file=@/path/to/document.pdf"
+```
+
+### Chunking Strategy
+
+When a document is ingested, it goes through a chunking pipeline:
+
+1. **Parsing**: the document is parsed according to its format (PDF text extraction, DOCX XML parsing, code tokenization)
+2. **Splitting**: the content is split into chunks of approximately 500-1000 tokens each
+3. **Overlap**: adjacent chunks overlap by ~100 tokens to preserve context at boundaries
+4. **Metadata**: each chunk is tagged with the source document, page/section number, and chunk index
+5. **Embedding**: each chunk is converted to a vector embedding using the configured provider
+6. **Indexing**: chunks are inserted into both the HNSW vector index and the FTS5 text index
+
+The chunk size and overlap are configurable:
+
+```toml
+[knowledge]
+chunk_size = 800        # Target chunk size in tokens
+chunk_overlap = 100     # Overlap between adjacent chunks
+```
+
+Smaller chunks give more precise search results but may lose broader context. Larger chunks preserve more context but may include irrelevant information. The defaults work well for most use cases.
 
 ### Searching the Knowledge Base
 
-The knowledge base is searched automatically when relevant to your question. Homun uses the same hybrid vector + full-text search as memory, so it finds both semantically similar and keyword-matching content.
+The knowledge base is searched automatically when relevant to your question. Homun uses the same hybrid vector + FTS5 search as memory, so it finds both semantically similar and keyword-matching content.
+
+You can also search explicitly:
+
+> "Search my knowledge base for deployment procedures"
+
+Or via the API:
+
+```bash
+curl -X POST https://localhost:18443/api/v1/knowledge/search \
+  -H "Authorization: Bearer wh_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "deployment procedures", "limit": 10}'
+```
+
+Search results include:
+- The matching text chunk
+- The source document name and path
+- The page or section number
+- A relevance score
+
+### Directory Watcher
+
+Point Homun at one or more directories and it will automatically ingest new or updated files:
+
+```toml
+[knowledge]
+watch_dirs = ["~/Documents/notes", "~/Projects/docs"]
+```
+
+The watcher monitors these directories for:
+- **New files**: automatically ingested within seconds
+- **Modified files**: re-ingested (old chunks are replaced with new ones)
+- **Deleted files**: chunks are removed from the index
+
+Changes are detected using filesystem events (via the `notify` crate). The watcher is recursive -- it monitors subdirectories as well.
+
+This is useful for keeping your knowledge base in sync with a notes folder, project documentation directory, or any collection of files you update regularly.
 
 ### Sensitive Data Protection
 
-Documents containing sensitive information (API keys, passwords, credentials) are automatically detected. Sensitive content is vault-gated, meaning it is stored encrypted and only accessed when explicitly needed.
+Documents containing sensitive information are automatically detected during ingestion. The sensitive data classifier scans for:
+
+| Pattern | Action |
+|---------|--------|
+| API keys and tokens | Vault-gated: encrypted, only accessed on explicit request |
+| Passwords and credentials | Vault-gated |
+| Social security numbers | Vault-gated |
+| Credit card numbers | Vault-gated |
+| Private keys (SSH, PGP, etc.) | Vault-gated |
+
+Vault-gated content is stored encrypted and excluded from normal search results. It is only included when the query specifically relates to the sensitive topic and the user has appropriate access.
+
+This means you can safely ingest documents that contain API keys or credentials -- they will not accidentally appear in unrelated search results or be sent to the LLM in contexts where they are not needed.
+
+### Managing the Knowledge Base
+
+From the Web UI under **Knowledge**:
+- View all ingested documents with chunk counts and file sizes
+- Search across all documents with the hybrid search
+- Delete documents (removes all associated chunks from both indexes)
+- Re-ingest documents after updates
+- See the total number of chunks and estimated storage size
+
+From the CLI:
+
+```bash
+# List ingested documents
+homun chat -m "List all documents in the knowledge base"
+
+# Search
+homun chat -m "Search knowledge base for authentication flow"
+```
+
+## Configuration
+
+### Memory Settings
+
+```toml
+[memory]
+consolidation_enabled = true           # Enable automatic memory consolidation
+consolidation_interval_secs = 3600     # How often to consolidate (default: 1 hour)
+```
+
+Setting `consolidation_enabled = false` disables automatic memory consolidation. You can still use the `remember` tool to save things to USER.md, and past conversations remain searchable in the database, but the LLM will not automatically extract and store memories.
+
+### Knowledge Settings
+
+```toml
+[knowledge]
+watch_dirs = ["~/Documents/notes"]     # Directories to watch for auto-ingestion
+embedding_provider = "fastembed"       # fastembed (local) or openai
+chunk_size = 800                       # Target chunk size in tokens
+chunk_overlap = 100                    # Overlap between adjacent chunks
+```
+
+If using OpenAI embeddings, you also need:
+
+```toml
+[providers.openai]
+api_key = "sk-..."
+```
+
+The embedding API key can be different from your chat model API key if needed.
+
+## Tips: When to Use What
+
+| Need | Use |
+|------|-----|
+| Homun should always know this about me | `remember` tool or edit USER.md |
+| I want Homun to reference this document | Knowledge Base (ingest the document) |
+| Homun should recall something from a past conversation | Automatic (long-term memory handles this) |
+| I want to store a reusable process or instruction | Skill (SKILL.md) |
+| I need Homun to use a specific API key | Vault (`homun vault set`) |
+| I want Homun to change its personality | Edit `~/.homun/brain/SOUL.md` |
+| I want to see what Homun remembers about a topic | Search in the Memory page or ask directly |
+
+## Troubleshooting
+
+### Memory Not Updating
+
+**Symptom**: Homun does not remember things you discussed in previous sessions.
+
+**Check**:
+1. Verify consolidation is enabled: `consolidation_enabled = true` in config
+2. Check that the gateway has been running long enough for consolidation to trigger (default: 1 hour interval)
+3. Look at logs for consolidation errors: `RUST_LOG=debug homun gateway`
+4. Try telling Homun explicitly: "Remember that..." to force an immediate save
+
+### Search Returns Wrong Results
+
+**Symptom**: memory or knowledge search returns irrelevant results.
+
+**Causes**:
+- The query may be too vague. Try more specific keywords.
+- If you recently changed the embedding provider, old embeddings may be in the wrong format. Re-index by removing and re-ingesting documents.
+- The chunk size may be too large, causing relevant content to be diluted in large chunks.
+
+### Embedding Errors
+
+**Symptom**: errors about failed embeddings in the logs.
+
+**Check**:
+- For `fastembed`: the model downloads on first use (~100 MB). Ensure internet access for the initial download, or pre-download the model.
+- For `openai`: verify your API key is valid and has embedding permissions.
+- Disk space: the HNSW index grows with the number of documents. Ensure sufficient disk space in `~/.homun/`.
+
+### Knowledge Base Ingest Fails
+
+**Symptom**: uploading a document fails or produces no searchable content.
+
+**Check**:
+- Verify the file format is supported (see the formats table above)
+- For PDFs: some PDFs are image-based (scanned documents) and contain no extractable text. These require OCR, which Homun does not currently support.
+- For very large files: ingestion may take several minutes. Check the logs for progress.
+- File permissions: ensure Homun has read access to the file.

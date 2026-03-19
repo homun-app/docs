@@ -1,52 +1,78 @@
 # Telegram
 
-Connect Homun to Telegram so you can chat with it from any device.
+Connect Homun to Telegram so you can chat with it from any device — phone, tablet, or desktop. Telegram is the easiest channel to set up and offers a rich messaging experience with support for documents, photos, formatting, and typing indicators.
 
-## Setup
+Homun uses **long polling** (not webhooks), so no public URL or port forwarding is required. The bot connects outward to Telegram's servers and works behind NAT, firewalls, and VPNs.
 
-### 1. Create a Telegram Bot
+## Quick Setup
 
-1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
-2. Send `/newbot` and follow the prompts
-3. Choose a name and username for your bot
-4. Copy the bot token (looks like `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot`, choose a name and username
+3. Copy the bot token (looks like `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
+4. Add it to `~/.homun/config.toml`
+5. Run `homun gateway`
+6. Open a chat with your bot and send a message
 
-### 2. Configure Homun
+## Step-by-Step Bot Creation
 
-Add the bot token to `~/.homun/config.toml`:
+### 1. Create the Bot with BotFather
+
+1. Open Telegram and search for [@BotFather](https://t.me/BotFather) (verified blue checkmark)
+2. Send `/newbot`
+3. Choose a **display name** (e.g., "Homun Assistant") — this is what users see in the chat header
+4. Choose a **username** (e.g., `homun_assistant_bot`) — must end in `bot`, must be unique on Telegram
+5. BotFather replies with your **bot token**. Copy it and keep it secret.
+
+### 2. Configure Bot Settings in BotFather
+
+While still in BotFather, configure these recommended settings:
+
+**Set bot description** (shown when users open the bot for the first time):
+```
+/setdescription
+```
+
+**Set bot commands** (shown in the menu button):
+```
+/setcommands
+```
+Then paste:
+```
+start - Start a conversation
+new - Clear session and start fresh
+reset - Clear session and start fresh
+```
+
+**Set privacy mode** (for group usage):
+```
+/mybots → select your bot → Bot Settings → Group Privacy → Turn off
+```
+With privacy mode ON (the default), the bot only sees messages that mention it. Turn it OFF if you want the bot to see all group messages.
+
+### 3. Add the Token to Homun
+
+Add the bot token to your configuration file:
 
 ```toml
 [channels.telegram]
 token = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 ```
 
-### 3. Start the Gateway
+### 4. Start the Gateway
 
 ```bash
 homun gateway
 ```
 
-### 4. Pair Your Account
+You should see in the logs:
 
-1. Open Telegram and find your bot by its username
-2. Send `/start`
-3. Homun generates a one-time pairing code and shows it in the gateway logs
-4. Send the code back to the bot
-5. You are now paired -- the bot will only respond to you
+```
+INFO Telegram channel (Frankenstein) starting
+```
 
-## Group Usage
+### 5. Start Chatting
 
-You can add Homun to a Telegram group:
-
-1. Add the bot to your group
-2. Mention the bot by name (e.g., `@your_bot_name how's the weather?`)
-3. The bot responds in the group
-
-To allow the bot to see all messages (not just mentions), disable privacy mode in BotFather:
-
-1. Open @BotFather
-2. Send `/mybots`, select your bot
-3. Go to **Bot Settings** > **Group Privacy** > **Turn off**
+Open Telegram, find your bot by its username, and send `/start` or any message. The bot responds using Homun's agent loop with full access to all configured tools.
 
 ## Configuration Reference
 
@@ -56,13 +82,203 @@ To allow the bot to see all messages (not just mentions), disable privacy mode i
 token = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 
 # Restrict to specific Telegram user IDs (optional)
-# If empty, pairing is used instead
-allowed_users = [123456789]
+# If empty and pairing_required is false, anyone can chat with the bot
+allow_from = [123456789, 987654321]
+
+# Require OTP pairing for unknown senders (default: false)
+# When true, senders not in allow_from receive a 6-digit code to verify
+pairing_required = false
+
+# In groups, only respond when @mentioned or replied to (default: true)
+mention_required = true
+
+# Response mode: automatic, assisted, on_demand, silent (default: automatic)
+response_mode = "automatic"
+
+# Persona: bot, owner, company, custom (default: bot)
+persona = "bot"
+
+# Default tone of voice for this channel
+tone_of_voice = ""
+
+# Channel to send draft notifications when in assisted mode
+# notify_channel = "web"
+# notify_chat_id = ""
+
+# Named agent to handle messages (empty = default agent)
+# default_agent = ""
 ```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `token` | String | (required) | Bot token from @BotFather |
+| `allow_from` | Array of integers | `[]` | Telegram user IDs allowed to interact. Empty = allow anyone (or use pairing) |
+| `pairing_required` | Boolean | `false` | Require OTP verification for unknown senders |
+| `mention_required` | Boolean | `true` | In groups, only respond when @mentioned or replied to |
+| `response_mode` | String | `"automatic"` | How the agent handles messages: `automatic`, `assisted`, `on_demand`, `silent` |
+| `persona` | String | `"bot"` | How the agent presents itself: `bot`, `owner`, `company`, `custom` |
+| `tone_of_voice` | String | `""` | Default communication style for this channel |
+| `notify_channel` | String | (none) | Where to send drafts when in assisted mode |
+| `notify_chat_id` | String | (none) | Chat ID on the notify channel |
+| `default_agent` | String | `""` | Named agent to handle this channel (empty = default) |
+
+### Finding Your Telegram User ID
+
+To get your Telegram user ID for the `allow_from` field:
+
+1. Search for **@userinfobot** on Telegram
+2. Send it any message
+3. It replies with your numeric user ID
+
+Alternatively, you can enable `pairing_required = true` and skip the allow-list entirely. When an unknown user messages the bot, they receive a 6-digit OTP code in the gateway logs, which they send back to verify.
 
 ## Features
 
-- Text messages, photos, documents, and voice messages
-- Streaming responses (edits the message as it generates)
-- Inline keyboard for approval requests
-- Markdown formatting in responses
+### Message Handling
+
+Homun processes text messages, captions on media, and bot commands. When a message arrives:
+
+1. The bot sends a **typing indicator** ("Homun is typing...") while the agent processes
+2. The agent generates a response using its full toolset
+3. The response is sent back with **HTML formatting** (bold, italic, code, lists)
+
+If Telegram's HTML parse mode fails (e.g., malformed tags), the bot automatically falls back to plain text.
+
+### Formatting
+
+Responses are automatically converted from Markdown to Telegram-compatible HTML:
+
+- `**bold**` becomes bold text
+- `*italic*` becomes italic text
+- `` `inline code` `` becomes monospace
+- Code blocks (triple backticks) become preformatted blocks
+- `~~strikethrough~~` becomes strikethrough
+- Headers (`#`, `##`, `###`) become bold text
+- Bullet points (`-` or `*`) become bullet characters
+
+### Media Support
+
+The bot accepts and processes these media types:
+
+- **Documents**: downloaded to a temp directory and passed to the agent as an attachment. The agent can read, analyze, or reference the file content.
+- **Photos with captions**: the caption is used as the message text, and the photo is available as an attachment.
+- **Voice messages**: received as audio attachments (OGG format).
+
+Outbound messages are text-only. The agent does not send images or files back through Telegram (use the Web UI for rich media responses).
+
+### Long Message Handling
+
+Telegram has a 4,096 character limit per message. Homun automatically splits longer responses at newline boundaries, sending multiple messages in sequence. Each chunk stays under 4,000 characters to leave room for formatting tags.
+
+### Bot Commands
+
+The bot recognizes these commands:
+
+| Command | Action |
+|---|---|
+| `/start` | Sends a welcome message |
+| `/new` | Clears the current session (starts fresh conversation) |
+| `/reset` | Same as `/new` |
+
+Any other text is processed as a regular message by the agent.
+
+## Group Chats
+
+### Adding the Bot to a Group
+
+1. Open the group in Telegram
+2. Go to group info and click **Add Members**
+3. Search for your bot by username and add it
+
+### Mention Behavior
+
+By default (`mention_required = true`), the bot only responds in groups when:
+
+- **@mentioned**: `@your_bot_name what's the weather?`
+- **Replied to**: reply to one of the bot's messages
+
+The mention tag is automatically stripped from the message before processing, so the agent sees clean input.
+
+### Privacy Mode
+
+Telegram bots have a **privacy mode** setting that controls what messages they can see in groups:
+
+- **Privacy ON** (default): the bot only receives messages that mention it, replies to its messages, commands, and service messages
+- **Privacy OFF**: the bot receives all messages in the group
+
+To change privacy mode, open @BotFather, send `/mybots`, select your bot, go to **Bot Settings** > **Group Privacy**.
+
+If you want the bot to see all messages (e.g., for a group assistant that should follow the full conversation), turn privacy OFF. If you only want the bot to respond when asked, leave it ON and set `mention_required = true` in the Homun config.
+
+### Groups and `mention_required = false`
+
+If you set `mention_required = false` in the Homun config, the bot responds to every message in every group it is in. This is generally not recommended unless the bot is in a dedicated group where every message is intended for it.
+
+## Security
+
+### Pairing Process
+
+When `pairing_required = true`, unknown senders go through a verification flow:
+
+1. User sends a message to the bot
+2. The gateway generates a 6-digit OTP code and logs it
+3. The user is asked to provide the code
+4. Once verified, the user is permanently paired
+
+Paired users are stored in the database. They do not need to verify again, even after gateway restarts.
+
+### Restricting Access
+
+For maximum security, combine both approaches:
+
+```toml
+[channels.telegram]
+token = "..."
+allow_from = [123456789]    # Only this user
+pairing_required = true      # Plus OTP verification
+```
+
+With `allow_from` set, only listed user IDs are accepted. With `pairing_required` on top, even listed users must complete OTP verification on first contact.
+
+If both `allow_from` is empty and `pairing_required` is false, anyone who finds your bot can chat with it. This is not recommended for production use.
+
+## Troubleshooting
+
+### Bot does not respond to messages
+
+1. **Check the gateway is running**: `homun gateway` should be active with no errors
+2. **Check the token**: verify the token in `config.toml` matches what BotFather gave you. A wrong token produces an auth error in the logs.
+3. **Check allow_from**: if `allow_from` is set, make sure your Telegram user ID is in the list
+4. **Check pairing**: if `pairing_required = true`, look in the gateway logs for the OTP code and send it to the bot
+5. **Check the logs**: run with `RUST_LOG=debug homun gateway` for detailed output
+
+### Bot does not respond in groups
+
+1. **Check mention_required**: if `true` (default), you must @mention the bot
+2. **Check privacy mode**: in BotFather, verify privacy mode is OFF if you want the bot to see all messages
+3. **Check group type**: the bot works in both regular groups and supergroups
+
+### "Telegram poll error, backing off"
+
+This usually means a network issue or invalid token. The bot automatically retries with a 5-second backoff. Check:
+
+- Internet connectivity
+- Token validity (try creating a new token with BotFather)
+- Firewall rules (the bot connects to `api.telegram.org` on port 443)
+
+### "Telegram poll timeout (normal)"
+
+This is expected behavior. Long polling uses 60-second timeouts. When no new messages arrive within 60 seconds, the connection times out and reconnects. This log line at `debug` level is informational only.
+
+### Messages are duplicated
+
+This can happen if you run multiple gateway instances with the same bot token. Only one gateway process should use a given bot token at a time.
+
+## Tips and Best Practices
+
+- **Use a dedicated bot for Homun**. Do not share the bot token with other services.
+- **Set bot commands in BotFather** so users see available commands in the Telegram menu button.
+- **Enable pairing for personal use**. Even if you are the only user, `pairing_required = true` adds a layer of protection against someone guessing your bot username.
+- **Use groups sparingly**. In group chats, every mention triggers the full agent loop. For high-traffic groups, consider `mention_required = true` to avoid excessive API calls.

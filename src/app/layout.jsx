@@ -11,6 +11,9 @@ export const metadata = {
   },
   description:
     'Documentation for Homun — your personal AI assistant. Single binary, local-first, privacy-focused, skill-powered.',
+  icons: {
+    icon: '/favicon.ico',
+  },
   openGraph: {
     title: 'Homun Docs',
     description: 'Documentation for Homun — your personal AI assistant.',
@@ -42,9 +45,7 @@ const footer = (
 export default async function RootLayout({ children }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
-      <Head>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+      <Head />
       <body>
         <Layout
           navbar={navbar}

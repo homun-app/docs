@@ -1,10 +1,19 @@
 # CLI
 
-The CLI channel lets you interact with Homun directly from your terminal. No gateway or network connection required.
+The CLI channel lets you interact with Homun directly from your terminal. Unlike other channels, the CLI does not require the gateway — it connects directly to the configured LLM provider for a lightweight, local-first experience.
 
-## Interactive Mode
+Homun's CLI supports three modes: **interactive** (REPL), **one-shot** (single message), and **TUI** (full-screen terminal UI).
 
-Start a conversation:
+## Quick Setup
+
+1. Make sure you have an LLM provider configured in `~/.homun/config.toml`
+2. Run `homun` or `homun chat`
+
+That is it. No gateway, no tokens, no setup wizard.
+
+## Interactive Mode (REPL)
+
+Start an interactive session:
 
 ```bash
 homun
@@ -16,7 +25,44 @@ or equivalently:
 homun chat
 ```
 
-Type your messages and press Enter. Responses stream in real-time. Press `Ctrl+C` to exit.
+You see a prompt:
+
+```
+Homun -- interactive mode
+Type your message. Commands: /new (reset), /quit (exit)
+
+you>
+```
+
+Type your message and press Enter. The agent processes it with full tool access (shell, files, web search, etc.) and streams the response:
+
+```
+you> What files are in the current directory?
+
+homun> Here are the files in the current directory:
+- Cargo.toml
+- src/
+- tests/
+- README.md
+...
+```
+
+### REPL Commands
+
+| Command | Action |
+|---|---|
+| `/new` | Clear the session and start a fresh conversation |
+| `/quit` or `/exit` | Exit the REPL |
+| `exit` or `quit` | Exit the REPL (without slash) |
+| `:q` | Exit (vim-style) |
+| `Ctrl+C` | Exit |
+| `Ctrl+D` | Exit (EOF) |
+
+### Session Memory
+
+Within an interactive session, the agent maintains full conversation context. Each message builds on the previous ones. Use `/new` to clear the session and start fresh without exiting.
+
+Sessions are stored in the database under the key `cli:default`. This means your CLI conversation history persists across sessions if you restart `homun chat`.
 
 ## One-Shot Mode
 
@@ -26,29 +72,68 @@ Send a single message and get the response:
 homun chat -m "What's the capital of Japan?"
 ```
 
-This is useful for scripting and automation. The process exits after the response is complete.
+The agent processes the message, prints the response, and the process exits. This is ideal for scripting, automation, and piping.
 
-## Scripting Examples
+### Exit Code
 
-Use Homun in shell scripts and pipelines:
+The process exits with code 0 on success. If the agent encounters an error (e.g., LLM provider unreachable), it exits with a non-zero code.
+
+## Scripting and Piping
+
+One-shot mode works with standard Unix piping and redirection:
 
 ```bash
 # Summarize a file
 cat report.txt | homun chat -m "Summarize this document"
 
-# Generate a commit message
+# Generate a commit message from staged changes
 git diff --staged | homun chat -m "Write a commit message for these changes"
 
 # Quick lookup
 homun chat -m "Convert 100 USD to EUR"
+
+# Process output of a command
+ls -la | homun chat -m "Which file is the largest?"
+
+# Save response to a file
+homun chat -m "Write a Python hello world script" > hello.py
+
+# Chain with other tools
+homun chat -m "List 5 random city names, one per line" | sort
+
+# Use in a shell script
+#!/bin/bash
+SUMMARY=$(cat "$1" | homun chat -m "Summarize this in one sentence")
+echo "Summary: $SUMMARY"
 ```
 
-## Features
+### Using with stdin
 
-- **Streaming output** -- responses appear as they are generated
-- **Local execution** -- connects directly to the LLM provider, no gateway needed
-- **Full tool access** -- all agent tools are available (shell, files, web search, etc.)
-- **Session memory** -- interactive mode maintains context within the session
+When you pipe content to `homun chat -m`, the piped content is prepended to the message. The agent sees both the piped content and the message text.
+
+## TUI Mode
+
+For a richer terminal experience, Homun includes a TUI (Terminal User Interface) built with [ratatui](https://ratatui.rs/):
+
+```bash
+homun tui
+```
+
+The TUI provides:
+
+- Full-screen layout with split panes
+- Scrollable conversation history
+- Status bar showing connection state, model, and session info
+- Keyboard navigation
+
+### TUI Key Bindings
+
+| Key | Action |
+|---|---|
+| `Enter` | Send message |
+| `Up/Down` | Scroll history |
+| `Ctrl+C` | Exit |
+| `Esc` | Exit |
 
 ## Configuration
 
@@ -62,10 +147,134 @@ default_model = "anthropic/claude-sonnet-4-20250514"
 api_key = "sk-ant-..."
 ```
 
-## TUI Mode
+### Using Local Models
 
-For a richer terminal experience, Homun includes a TUI (Terminal User Interface) with a full-screen layout, scrollable history, and status bar:
+For fully offline operation, configure Ollama:
+
+```toml
+[provider]
+default_model = "ollama/llama3.2"
+
+[provider.ollama]
+host = "http://localhost:11434"
+```
+
+Then run Ollama separately (`ollama serve`) and use the CLI without any internet connection.
+
+### Model Override
+
+You can override the default model for a specific CLI session using environment variables:
 
 ```bash
-homun tui
+HOMUN_MODEL="anthropic/claude-sonnet-4-20250514" homun chat -m "Hello"
 ```
+
+## Features
+
+### Full Tool Access
+
+The CLI has access to all agent tools:
+
+- **Shell**: execute commands on your system
+- **File**: read, write, edit, and list files
+- **Web search**: search the web (Brave, Tavily)
+- **Knowledge**: search the RAG knowledge base
+- **Memory**: access long-term memory
+- **Vault**: read secrets (with permission)
+- **Browser**: automate browser tasks (if gateway is also running)
+
+### Streaming Output
+
+Responses stream to the terminal as they are generated. You see text appearing in real-time, similar to how ChatGPT or Claude display responses.
+
+### Local Execution
+
+The CLI connects directly to the LLM provider API — no gateway process needed. This makes it the fastest way to interact with Homun, with minimal overhead.
+
+### Error Handling
+
+If the LLM provider is unreachable or returns an error, the CLI displays the error message:
+
+```
+you> Hello
+
+[error] Failed to connect to Anthropic API: connection refused
+```
+
+## Common Usage Patterns
+
+### Quick Questions
+
+```bash
+homun chat -m "What is the difference between TCP and UDP?"
+```
+
+### Code Generation
+
+```bash
+homun chat -m "Write a Rust function that reverses a string" > reverse.rs
+```
+
+### File Analysis
+
+```bash
+cat error.log | homun chat -m "What errors are in this log file?"
+```
+
+### Shell Automation
+
+```bash
+# Daily report script
+#!/bin/bash
+echo "=== Daily Report $(date) ===" > report.txt
+git log --oneline --since="1 day ago" | \
+  homun chat -m "Summarize these git commits" >> report.txt
+```
+
+### Git Integration
+
+```bash
+# Generate commit message
+git diff --staged | homun chat -m "Write a conventional commit message"
+
+# Explain recent changes
+git log --oneline -10 | homun chat -m "What has changed recently?"
+
+# Review a diff
+git diff main..feature | homun chat -m "Review this diff for issues"
+```
+
+## Troubleshooting
+
+### "Failed to connect to Anthropic API"
+
+1. Check your API key in `config.toml`
+2. Check internet connectivity
+3. Try `curl https://api.anthropic.com/v1/messages` to verify API access
+
+### No response (hangs)
+
+1. The LLM provider may be slow or overloaded. Wait a moment.
+2. Check `RUST_LOG=debug homun chat -m "test"` for detailed logs
+3. Verify the model name is valid (e.g., `anthropic/claude-sonnet-4-20250514`)
+
+### Piped content not included in message
+
+Make sure you are using `-m` flag: `cat file.txt | homun chat -m "Summarize this"`. Without `-m`, the CLI enters interactive mode and ignores stdin.
+
+### Session state not cleared between runs
+
+One-shot mode (`-m`) uses the same session key (`cli:default`). Previous context may leak between runs. Use a fresh session or clear it:
+
+```bash
+homun chat -m "/new"
+homun chat -m "Your actual question"
+```
+
+## Tips and Best Practices
+
+- **Use one-shot mode for scripts** (`homun chat -m "..."`) — it exits cleanly and works with pipes.
+- **Use interactive mode for conversations** — context is maintained across messages within the session.
+- **Set up a shell alias** for quick access: `alias h="homun chat -m"` so you can type `h "What time is it?"`.
+- **Combine with Unix tools**: pipe `grep`, `awk`, `jq` output into Homun for analysis.
+- **Use local models** (Ollama) for privacy-sensitive tasks that should not leave your machine.

@@ -1,106 +1,516 @@
 # Security
 
-Homun includes multiple layers of security to protect your data and control access.
+Homun includes multiple layers of security: password-based authentication with strong hashing, rate limiting, API key management, an encrypted vault for secrets, two-factor authentication, an emergency stop mechanism, and an exfiltration guard that prevents sensitive data from leaking through LLM responses.
+
+## Security Architecture Overview
+
+| Layer | What It Protects | Default State |
+|-------|-----------------|:-------------:|
+| Web authentication | Web UI access | Enabled (required) |
+| Rate limiting | Brute-force and abuse prevention | Enabled |
+| API keys | Programmatic access scoping | Manual setup |
+| CSRF protection | Cross-site request forgery | Enabled |
+| Encrypted vault | Secrets at rest | Enabled |
+| Vault leak detection | Secrets in LLM responses | Enabled (always on) |
+| 2FA (TOTP) | Login with second factor | Disabled (opt-in) |
+| Device approval | New browser verification | Disabled (opt-in) |
+| E-Stop | Emergency kill switch | Available |
+| Exfiltration guard | Sensitive data in outputs | Enabled (always on) |
+| DM pairing | Channel user verification | Enabled per channel |
+| Sandbox | Shell command isolation | Enabled |
 
 ## Web Authentication
 
-The Web UI uses password-based authentication with strong defaults:
+The Web UI uses password-based authentication with hardened defaults designed to resist brute-force attacks.
 
-- **PBKDF2** hashing with 600,000 iterations
-- **HMAC-signed** session cookies
-- **CSRF** protection on all state-changing requests
+### Password Hashing
 
-Create your admin account during the setup wizard or via CLI:
+Passwords are hashed using **PBKDF2-HMAC-SHA256** with 600,000 iterations. This is deliberately slow -- a single hash takes roughly 200ms on modern hardware, making brute-force attacks impractical. Homun never stores plaintext passwords anywhere.
+
+The iteration count follows OWASP recommendations and is above the 2023 NIST minimum of 600,000 iterations for PBKDF2-HMAC-SHA256.
+
+### Session Cookies
+
+After successful login, Homun issues an **HMAC-signed session cookie**. The cookie properties are:
+
+| Property | Value | Purpose |
+|----------|-------|---------|
+| `Secure` | `true` | Only sent over HTTPS |
+| `HttpOnly` | `true` | Not accessible from JavaScript |
+| `SameSite` | `Lax` | CSRF protection for cross-origin requests |
+| `Max-Age` | 86400 (24h) | Session expiry (configurable) |
+| Signature | HMAC-SHA256 | Prevents tampering |
+
+Session lifetime is configurable:
+
+```toml
+[channels.web]
+session_ttl_secs = 3600    # 1 hour (default: 86400 = 24 hours)
+```
+
+### CSRF Protection
+
+All state-changing requests (POST, PUT, PATCH, DELETE) from web sessions require a CSRF token. The token is provided in the `homun_csrf` cookie and must be included in the `X-CSRF-Token` request header. Bearer token authentication (API keys) bypasses CSRF checks since tokens are not vulnerable to CSRF attacks.
+
+### Creating the Admin Account
+
+Set up your admin account during the setup wizard (Web UI) or via the CLI:
 
 ```bash
 homun config
 ```
 
-## API Keys
+The interactive wizard prompts for a username and password. Password requirements:
+- Minimum 8 characters
+- No maximum length
+- No character class requirements (use a long passphrase instead)
 
-Generate API keys to access Homun programmatically. Keys use the `wh_` prefix and support scoped permissions:
-
-| Scope | Access |
-|-------|--------|
-| `admin` | Full control |
-| `chat` | Send and receive messages |
-| `read` | Query-only access |
-
-Create API keys from the Web UI under **Account > API Keys**, then use them as bearer tokens:
+You can also manage users via the CLI:
 
 ```bash
-curl -H "Authorization: Bearer wh_your_token_here" \
-  https://localhost:18443/api/v1/health
+# List all users
+homun users list
+
+# Create a new user
+homun users add alice
+
+# Create an admin user
+homun users add bob --admin
+
+# Show user details
+homun users info alice
+
+# Delete a user
+homun users remove alice
 ```
+
+### Session Binding
+
+Homun tracks the IP address and User-Agent of each session. If either changes significantly during a session (e.g., IP shifts to a different country), Homun logs a warning. This helps detect session hijacking without breaking legitimate use cases like mobile networks changing IPs.
 
 ## Rate Limiting
 
-Built-in rate limits protect against brute force and abuse:
+Built-in rate limits protect against brute-force attacks and API abuse. Limits are tracked per IP address using a sliding window.
 
-| Endpoint | Default Limit |
-|----------|--------------|
-| Authentication | 5 requests/min per IP |
-| API calls | 60 requests/min per IP |
+| Endpoint Category | Default Limit | Configurable Key |
+|-------------------|---------------|------------------|
+| Authentication (login) | 5 requests/min | `auth_rate_limit_per_minute` |
+| API calls | 60 requests/min | `api_rate_limit_per_minute` |
 
-Customize in your config:
+When a limit is exceeded, Homun returns HTTP 429 (Too Many Requests) with a `Retry-After` header indicating how many seconds to wait.
+
+### Configuration
 
 ```toml
 [channels.web]
-auth_rate_limit_per_minute = 3
-api_rate_limit_per_minute = 30
+auth_rate_limit_per_minute = 3    # Stricter for remote access
+api_rate_limit_per_minute = 30    # Lower if needed
 ```
 
-## HTTPS / TLS
+### Rate Limit Headers
 
-Homun serves HTTPS by default with a self-signed certificate. For production use with a real domain, set up a reverse proxy (see [Remote Access](/configuration/remote-access)).
+Every API response includes rate limit headers:
+
+| Header | Meaning |
+|--------|---------|
+| `X-RateLimit-Limit` | Maximum requests allowed per window |
+| `X-RateLimit-Remaining` | Requests remaining in current window |
+| `Retry-After` | Seconds to wait (only on 429 responses) |
+
+### Behind a Reverse Proxy
+
+When Homun is behind a reverse proxy (Nginx, Caddy), all requests appear to come from the proxy's IP. Enable `trust_x_forwarded_for` so rate limiting uses the real client IP:
+
+```toml
+[channels.web]
+trust_x_forwarded_for = true
+```
+
+**Warning**: Only enable this when Homun is behind a trusted proxy. If Homun is directly exposed to the internet, a malicious client could forge the `X-Forwarded-For` header to bypass rate limits.
+
+## API Keys
+
+API keys provide programmatic access to Homun's REST API. They use the `wh_` prefix and support scoped permissions.
+
+### Key Scopes
+
+| Scope | Permissions |
+|-------|------------|
+| `admin` | Full control -- all endpoints, configuration changes, user management |
+| `chat` | Send and receive messages, list sessions, access chat-related endpoints |
+| `read` | Query-only access -- list skills, read config, view status, search memory |
+
+### Creating API Keys
+
+From the Web UI:
+1. Go to **Account > API Keys**
+2. Click **Create API Key**
+3. Choose a name and scope
+4. Copy the generated key -- it is shown only once
+
+From the API (requires an existing admin key or session):
+
+```bash
+curl -X POST https://localhost:18443/api/v1/account/api-keys \
+  -H "Authorization: Bearer wh_existing_admin_key" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "CI Pipeline", "scope": "read"}'
+```
+
+Response:
+
+```json
+{
+  "id": "key_abc123",
+  "name": "CI Pipeline",
+  "scope": "read",
+  "key": "wh_live_abc123def456..."
+}
+```
+
+The `key` field is only returned at creation time. Store it securely.
+
+### Using API Keys
+
+Include the key as a Bearer token in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer wh_your_key_here" \
+  https://localhost:18443/api/v1/health
+```
+
+API keys bypass CSRF checks and 2FA requirements. They are a "something you have" authentication factor by themselves.
+
+### Revoking API Keys
+
+From the Web UI: go to **Account > API Keys** and click **Revoke** next to the key.
+
+From the API:
+
+```bash
+curl -X DELETE https://localhost:18443/api/v1/account/api-keys/{key_id} \
+  -H "Authorization: Bearer wh_admin_key"
+```
+
+Revoked keys are immediately invalid. Any in-flight requests using the key will fail.
+
+### Best Practices
+
+- Create separate keys for each integration (CI, scripts, monitoring)
+- Use the narrowest scope possible (`read` for dashboards, `chat` for bots)
+- Rotate keys periodically
+- Never commit keys to source control -- use environment variables or the vault
+- Name keys descriptively (`ci-pipeline-prod`, `grafana-dashboard`, `mobile-app`)
 
 ## Encrypted Vault
 
-The vault stores secrets encrypted with AES-256-GCM. The master key is stored in your OS keychain (macOS Keychain, Linux Secret Service, or Windows Credential Manager).
+The vault provides encrypted storage for secrets (API keys, tokens, passwords) that Homun, its skills, and automations can reference by name without exposing the actual values.
+
+### Encryption Details
+
+| Property | Value |
+|----------|-------|
+| Algorithm | AES-256-GCM (authenticated encryption) |
+| Key derivation | OS keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
+| Key storage | `keyring::Entry::new("dev.homun.secrets", "master")` |
+| Memory handling | Zeroized after use (secrets are cleared from RAM when no longer needed) |
+| Storage file | `~/.homun/secrets.enc` |
+| Nonce | Random per-encryption (never reused) |
+
+The master encryption key is generated on first use and stored in your OS keychain. This means:
+- On **macOS**: the key is in Keychain Access, protected by your login password and (optionally) Touch ID
+- On **Linux**: the key is in the Secret Service (GNOME Keyring or KDE Wallet)
+- On **Windows**: the key is in Windows Credential Manager
+
+The `secrets.enc` file is useless without the master key from the OS keychain. If you copy the file to another machine, the secrets cannot be decrypted.
+
+### CLI Commands
 
 ```bash
 # Store a secret
-homun vault set MY_API_KEY "sk-secret-value"
+homun vault set OPENAI_KEY "sk-proj-abc123..."
 
-# Retrieve a secret
-homun vault get MY_API_KEY
+# Retrieve a secret (printed to stdout)
+homun vault get OPENAI_KEY
 
-# List stored secrets
+# List all stored secret names (values are never shown)
 homun vault list
 
 # Remove a secret
-homun vault remove MY_API_KEY
+homun vault remove OPENAI_KEY
 ```
 
-Skills and automations can reference vault secrets by name without exposing the actual values.
+### Web UI
+
+The vault is also manageable from the Web UI at **Vault** in the sidebar. You can add, view (masked), and delete secrets from the browser interface.
+
+### How Secrets Are Used
+
+**In config files**: Reference vault secrets using the `${vault:KEY_NAME}` syntax:
+
+```toml
+[providers.anthropic]
+api_key = "${vault:ANTHROPIC_API_KEY}"
+
+[providers.openai]
+api_key = "${vault:OPENAI_KEY}"
+```
+
+When Homun reads the config, it resolves these references by looking up the key name in the vault and decrypting the value. The actual secret value is never written to `config.toml`.
+
+**In skills**: Skills can declare required environment variables in their `SKILL.md` frontmatter:
+
+```yaml
+env:
+  - WEATHER_API_KEY
+  - GEOCODING_TOKEN
+```
+
+When the skill executes, Homun looks up each variable name in the vault and injects the decrypted value into the script's environment. The skill script accesses them as normal environment variables (`$WEATHER_API_KEY` in bash, `os.environ["WEATHER_API_KEY"]` in Python).
+
+**In automations**: Automations can reference vault secrets in action parameters. The value is decrypted at execution time and never stored in the automation definition.
+
+**Provider API keys in TOML**: Provider keys configured directly in `config.toml` (not using vault references) are stored as encrypted TOML values with a `***ENCRYPTED***` marker. When Homun reads the config, it decrypts them using the vault's master key.
+
+### Zeroized Memory
+
+Homun uses the `zeroize` crate to ensure that secret values are overwritten with zeros in RAM once they are no longer needed. This means:
+- After a vault lookup, the decrypted value is cleared from memory when the variable goes out of scope
+- Even if someone takes a memory dump of the Homun process, vault secrets are not lingering in memory
+- This applies to both vault values and provider API keys
+
+### Vault Leak Detection
+
+Homun includes a vault leak detector that scans outgoing messages and tool results for vault secret values. If a secret value appears in text that would be sent to the LLM or returned to the user, it is automatically redacted and replaced with `[REDACTED:secret_name]`. This prevents accidental exposure of secrets through LLM responses.
+
+The detector runs on all outbound content, including:
+- Tool execution results
+- Shell command output
+- File read results
+- Web page content
+- LLM responses
 
 ## Two-Factor Authentication (TOTP)
 
-Enable 2FA for an extra layer of security on web login:
+Add an extra layer of security to web login with time-based one-time passwords (TOTP).
+
+### Enabling 2FA
 
 1. Go to **Account > Security** in the Web UI
 2. Click **Enable 2FA**
-3. Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)
-4. Enter the 6-digit code to confirm
+3. A QR code is displayed -- scan it with your authenticator app:
+   - Google Authenticator
+   - Authy
+   - 1Password
+   - Bitwarden
+   - Any TOTP-compatible app
+4. Enter the 6-digit code from your app to confirm setup
+5. Save the backup codes shown on screen -- store them securely
 
-Once enabled, every login requires both your password and a TOTP code.
+### Login Flow with 2FA
+
+Once enabled, every login requires two steps:
+1. Enter your username and password
+2. Enter the 6-digit TOTP code from your authenticator app
+
+The code changes every 30 seconds. Homun allows a small time window (one period before and after) to account for clock drift between your device and the server.
+
+### Backup Codes
+
+During 2FA setup, Homun generates a set of single-use backup codes. Each code can be used once in place of a TOTP code if you lose access to your authenticator app. Store these codes in a secure location (password manager, printed and locked away).
+
+Once a backup code is used, it is permanently invalidated.
+
+### Disabling 2FA
+
+To disable 2FA, go to **Account > Security** and click **Disable 2FA**. You must enter a valid TOTP code or backup code to confirm. This prevents someone with access to your session from disabling 2FA without the second factor.
+
+### Requiring 2FA for All Users
+
+To enforce 2FA across all accounts:
+
+```toml
+[security]
+require_2fa = true
+```
+
+When enabled, users who have not set up 2FA will be prompted to do so on their next login. They cannot access the system until 2FA is configured.
+
+### API Keys and 2FA
+
+API key authentication bypasses 2FA. Keys are already a "something you have" factor. If you need maximum security, use short-lived keys and rotate them frequently.
 
 ## Emergency Stop (E-Stop)
 
-The emergency stop instantly halts all running operations:
+The emergency stop is a kill switch that immediately halts all running operations. Use it when Homun is doing something you did not intend and you need everything to stop immediately.
 
-- Stops the agent loop
-- Terminates browser automation
-- Disconnects MCP servers
-- Cancels in-flight tool executions
+### What E-Stop Kills
 
-Trigger via the Web UI (red button in the dashboard) or the API:
+| Component | Action |
+|-----------|--------|
+| Agent loop | Immediately stops processing; current LLM call is cancelled |
+| Browser automation | Closes all browser sessions |
+| MCP servers | Disconnects all connected MCP servers |
+| Tool executions | Cancels in-flight tool calls |
+| Subagents | Terminates all background subagent tasks |
+| Workflows | Pauses all running workflows (can be resumed later) |
+
+### How to Trigger E-Stop
+
+**Web UI**: Click the red E-Stop button on the Dashboard page. The button is always visible in the dashboard header for quick access.
+
+**API**:
 
 ```bash
 curl -X POST https://localhost:18443/api/v1/estop \
   -H "Authorization: Bearer wh_your_token"
 ```
 
+Response:
+
+```json
+{
+  "ok": true,
+  "message": "Emergency stop activated. All operations halted."
+}
+```
+
+**CLI**: Press `Ctrl+C` twice rapidly in the gateway terminal. A single `Ctrl+C` triggers graceful shutdown; double `Ctrl+C` triggers E-Stop.
+
+### Recovery After E-Stop
+
+After triggering an E-Stop:
+1. The gateway remains running but the agent is paused
+2. Review the logs to understand what was happening: check the Web UI **Logs** page or `~/.homun/logs/homun.log`
+3. Click **Resume** on the Dashboard or restart the gateway
+4. Paused workflows can be resumed from their last completed step
+5. Browser sessions must be restarted manually if needed
+
+E-Stop does not delete data or corrupt state. It is a safe operation. You can trigger it as often as needed without risk.
+
+### E-Stop vs Ctrl+C vs `homun stop`
+
+| Action | What It Does |
+|--------|-------------|
+| `Ctrl+C` (once) | Graceful shutdown -- finishes current operation, then stops |
+| `Ctrl+C` (twice) | E-Stop -- kills everything immediately |
+| `homun stop` | Sends graceful stop signal to running gateway |
+| API E-Stop | Kills everything immediately, gateway stays running |
+
 ## Exfiltration Guard
 
-Homun scans tool results for sensitive data patterns (API keys, passwords, tokens) and redacts them before they reach the LLM. This prevents accidental data leaks through model responses.
+The exfiltration guard is a passive security system that scans tool results and LLM outputs for sensitive data patterns. It prevents accidental data leaks where the LLM might include API keys, passwords, or tokens in its responses.
+
+### What It Detects
+
+The guard scans for 7 pattern categories:
+
+| Pattern | Examples |
+|---------|----------|
+| API keys | `sk-...`, `sk-ant-...`, `gsk_...`, `sk-or-...` |
+| Tokens | Bearer tokens, JWT tokens, OAuth tokens |
+| Passwords | Patterns matching `password=`, `passwd:`, credential strings |
+| Private keys | PEM-encoded private keys, SSH private keys |
+| Connection strings | Database URLs with credentials |
+| AWS credentials | Access key IDs, secret access keys |
+| Generic secrets | High-entropy strings that look like secrets |
+
+### How Redaction Works
+
+When a sensitive pattern is detected in a tool result:
+1. The value is replaced with `[REDACTED]` before it reaches the LLM
+2. A warning is logged with the pattern type (but not the actual value)
+3. The original, unredacted result is available in the logs at `debug` level (for your review only)
+
+The exfiltration guard runs on:
+- Shell command output
+- File read results
+- Web page content fetched by the browser
+- MCP tool results
+- Email content
+
+### Configuration
+
+The exfiltration guard is always enabled and cannot be disabled. This is by design -- it is a safety net, not a configurable feature. Even if you trust every tool and data source, the guard protects against unexpected leaks (e.g., a config file containing an API key that the agent reads).
+
+## DM Pairing (Channel Security)
+
+When Homun receives a message from an unknown sender on a messaging channel (Telegram, Discord, WhatsApp, Slack), it does not process the message. Instead, it initiates a **pairing flow** using a one-time password (OTP).
+
+### How Pairing Works
+
+1. Unknown sender sends a message to Homun on Telegram (or any channel)
+2. Homun replies with a 6-digit OTP code
+3. The OTP is also displayed in the server logs and Web UI notifications
+4. The user enters the OTP in the chat or the Web UI confirms it
+5. The sender is now "paired" and all future messages are processed normally
+
+### Managing Paired Users
+
+```bash
+# Link a channel identity to a user
+homun users link --user alice --channel telegram --id "123456789"
+
+# Unlink a channel identity
+homun users unlink --user alice --channel telegram --id "123456789"
+```
+
+From the Web UI, go to **Channels** to see paired users and manage their access.
+
+### Pre-Approving Users
+
+To skip the OTP flow for known users, link their channel identity before they send the first message:
+
+```bash
+homun users link --user alice --channel telegram --id "123456789" --display-name "Alice"
+```
+
+## HTTPS / TLS Configuration
+
+Homun serves HTTPS by default using a self-signed TLS certificate. The certificate is auto-generated on first startup and stored in `~/.homun/tls/`.
+
+### Self-Signed Certificate
+
+The self-signed certificate is sufficient for local access. Your browser will show a security warning -- this is expected. You can add an exception in your browser to suppress the warning.
+
+The certificate is valid for 365 days and is automatically regenerated when it expires.
+
+### Custom TLS Certificate
+
+For production deployments or to avoid browser warnings, use a reverse proxy with a real TLS certificate instead of configuring custom certificates directly. See [Remote Access](/configuration/remote-access) for Caddy and Nginx examples with Let's Encrypt.
+
+### Binding Address
+
+By default, Homun binds to `127.0.0.1` (localhost only). This means it is not accessible from other machines on your network. For remote access, use a reverse proxy or SSH tunnel rather than changing the bind address:
+
+```toml
+[channels.web]
+host = "127.0.0.1"    # Keep this as localhost
+port = 18443
+```
+
+**Security note**: Changing `host` to `0.0.0.0` exposes Homun directly to your network. This is not recommended. Always use a reverse proxy for remote access to benefit from proper TLS, rate limiting, and access control at the network edge.
+
+## Security Hardening Checklist
+
+When deploying Homun for remote access, apply these settings:
+
+```toml
+[channels.web]
+host = "127.0.0.1"
+trust_x_forwarded_for = true       # Behind reverse proxy
+session_ttl_secs = 3600            # 1-hour sessions
+require_device_approval = true     # Verify new browsers
+auth_rate_limit_per_minute = 3     # Strict login limits
+
+[security]
+require_2fa = true                 # Enforce 2FA for all users
+```
+
+Additional steps:
+1. Set up a reverse proxy with real TLS certificates (see [Remote Access](/configuration/remote-access))
+2. Enable 2FA on all user accounts
+3. Use API keys with the narrowest possible scope
+4. Store all provider API keys in the vault, not directly in config
+5. Review the Logs page periodically for suspicious activity
+6. Keep the Homun binary updated for security patches

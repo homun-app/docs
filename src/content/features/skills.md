@@ -1,98 +1,579 @@
 # Skills
 
-Skills extend Homun's capabilities through the open Agent Skills standard. Each skill is a self-contained package with a `SKILL.md` file that defines what the skill does and how to trigger it.
+Skills extend Homun's capabilities through the open **Agent Skills** standard. Each skill is a self-contained package that teaches Homun how to handle a specific domain -- from checking the weather to managing your calendar to interacting with third-party APIs. Skills are portable across any AI assistant that supports the Agent Skills specification.
 
-## What Are Skills?
+## What Are Agent Skills?
 
-A skill is a directory containing a `SKILL.md` file with YAML frontmatter that describes:
+A skill is a directory containing a `SKILL.md` file with YAML frontmatter that defines what the skill does, when it activates, what tools it can use, and what secrets it needs. The body of the file contains detailed instructions for the agent.
 
-- **Name** and **description** -- what the skill does
-- **Trigger conditions** -- when the skill activates
-- **Scripts** -- optional executable scripts (Python, Bash, JavaScript)
-- **Environment variables** -- secrets and config injected at runtime
+Think of skills as specialized knowledge modules. Without a weather skill, Homun does not know how to call a weather API. With one installed, it knows the API endpoint, authentication method, response format, and how to present the data to you.
 
-Skills follow the open Agent Skills specification, making them portable across compatible AI assistants.
+The Agent Skills standard is an open specification. Skills you create for Homun also work with other assistants that implement the same spec, and skills written for those assistants work with Homun.
+
+### Why Skills?
+
+- **Separation of concerns**: each skill handles one domain, keeping the system modular
+- **Portability**: skills follow an open standard and work across compatible assistants
+- **Security**: each skill declares exactly what tools and secrets it needs -- nothing more
+- **Community**: share skills through GitHub, ClawHub, or OpenSkills registries
+- **No code changes**: adding a skill does not require recompiling Homun
+- **Hot-reload**: skills are picked up within seconds of being added, no restart needed
+
+## Skill Directories
+
+Homun scans three locations for skills at startup and hot-reloads when files change:
+
+| Directory | Purpose | Priority |
+|-----------|---------|----------|
+| `~/.homun/skills/` | User-installed skills (via `homun skills add` or Web UI) | Highest |
+| `./skills/` | Project-local skills (bundled with a specific project) | Medium |
+| Built-in | 5 default skills shipped with Homun | Lowest |
+
+If two skills share the same name, the higher-priority directory wins. User-installed skills always take precedence over project-local and built-in ones. This lets you override a built-in skill with your own version if needed.
+
+### Built-in Skills
+
+Homun ships with 5 default skills that cover common use cases:
+
+| Skill | Purpose |
+|-------|---------|
+| `summarizer` | Summarize documents, articles, and conversations |
+| `translator` | Translate text between languages |
+| `code-reviewer` | Review code for bugs, style, and best practices |
+| `writer` | Write emails, documents, and creative content |
+| `researcher` | Multi-step web research with source citations |
+
+These are always available and do not need installation. You can override any built-in skill by placing a skill with the same name in `~/.homun/skills/`.
 
 ## Installing Skills
 
-Install skills directly from GitHub:
+### From GitHub
+
+Install a skill directly from a GitHub repository:
 
 ```bash
 homun skills add owner/repo
 ```
 
-Homun downloads the repository, scans it for security issues, and installs the skill to `~/.homun/skills/`.
+Example:
 
-You can also install from the skill marketplace in the Web UI under **Skills**.
+```bash
+homun skills add johndoe/weather-skill
+```
+
+Homun downloads the repository, runs a security scan, and installs the skill to `~/.homun/skills/`. If the scan finds potentially dangerous patterns, it shows the findings and asks for confirmation before proceeding.
+
+The repository must contain a `SKILL.md` file at the root or inside a skill subdirectory. If the repository contains multiple skills (one per subdirectory, each with its own `SKILL.md`), all of them are installed.
+
+### From the Web UI
+
+Go to **Skills** in the sidebar, then:
+
+1. Click **Marketplace** to browse available skills from ClawHub and OpenSkills
+2. Click **Install** on any skill you want
+3. Review the security scan results
+4. Confirm the installation
+
+The Web UI shows skill descriptions, ratings, install counts, and compatibility information before you install.
+
+### From a Local Directory
+
+Copy a skill directory directly into `~/.homun/skills/`:
+
+```bash
+cp -r ~/my-skills/weather ~/.homun/skills/
+```
+
+Homun detects the new skill within seconds (hot-reload via file watcher) and makes it available for use. No restart required.
+
+### Version Pinning
+
+When installing from GitHub, Homun records the commit hash. To update a skill to the latest version:
+
+```bash
+homun skills update weather
+```
+
+Or update all installed skills:
+
+```bash
+homun skills update --all
+```
 
 ## Managing Skills
 
-```bash
-# List all installed skills
-homun skills list
+### Listing Skills
 
-# Remove a skill
-homun skills remove skill-name
+```bash
+homun skills list
 ```
 
-## Skill Directories
+Output shows all installed skills with their source and status:
 
-Homun scans multiple directories for skills:
+```
+Name            Version  Source              Status
+summarizer      1.0.0    built-in            active
+translator      1.0.0    built-in            active
+code-reviewer   1.0.0    built-in            active
+writer          1.0.0    built-in            active
+researcher      1.0.0    built-in            active
+weather         1.2.0    johndoe/weather     active
+deploy-helper   0.5.0    ~/.homun/skills/    disabled (missing env: DEPLOY_TOKEN)
+```
 
-| Directory | Purpose |
-|-----------|---------|
-| `~/.homun/skills/` | User-installed skills |
-| `./skills/` | Project-local skills |
-| Built-in | 5 default skills bundled with Homun |
+The `Status` column shows whether the skill is active and ready, or disabled with a reason (missing environment variables, manually disabled, etc.).
+
+### Removing Skills
+
+```bash
+homun skills remove weather
+```
+
+This deletes the skill directory from `~/.homun/skills/`. Built-in skills cannot be removed, but they can be disabled.
+
+### Searching Registries
+
+```bash
+homun skills search "weather forecast"
+```
+
+Searches ClawHub and OpenSkills for matching skills. Results show name, description, author, and install count.
+
+### From the Web UI
+
+Go to **Skills** to see all installed skills, their descriptions, trigger conditions, and activation status. You can enable, disable, or remove skills from this page.
 
 ## Creating Custom Skills
 
-Create a directory with a `SKILL.md` file:
+### Directory Structure
+
+A minimal skill requires only a `SKILL.md` file. A full skill with executable scripts looks like this:
 
 ```
 my-skill/
-  SKILL.md
+  SKILL.md               # Required: skill definition
   scripts/
-    run.py
+    run.py               # Optional: executable script (Python)
+    helpers.sh           # Optional: helper scripts (Bash)
+    process.js           # Optional: Node.js script
+  data/
+    templates.json       # Optional: data files
+  README.md              # Optional: documentation
 ```
 
-The `SKILL.md` uses YAML frontmatter to define the skill:
+Scripts can be written in Python, Bash, or JavaScript. They are executed via the `shell` tool inside the sandbox, with environment variables injected from the vault.
+
+### Complete SKILL.md Example
 
 ```markdown
 ---
-name: my-skill
-description: Does something useful
-trigger: when the user asks about X
-tools: [web_search, file]
+name: weather
+description: Get current weather and forecasts for any location
+version: "1.0.0"
+author: your-name
+trigger: when the user asks about weather, temperature, or forecast
+tools:
+  - web_fetch
+  - shell
 env:
-  - MY_API_KEY
+  - WEATHER_API_KEY
+eligibility:
+  channels:
+    - telegram
+    - web
+    - cli
+invocation: auto
 ---
 
 ## Instructions
 
-Detailed instructions for the agent when this skill is active.
-Tell the agent how to use the scripts and tools available.
+You are a weather assistant. When the user asks about weather:
+
+1. Use the `shell` tool to run `python scripts/fetch_weather.py "{location}"`
+2. The script returns JSON with current conditions and a 5-day forecast
+3. Present the data in a clear, readable format:
+   - Current temperature and conditions
+   - Today's high/low
+   - 5-day forecast summary
+
+### Error Handling
+
+If the API returns an error or the location is not found, tell the user
+and suggest they check the spelling or try a nearby city.
 ```
 
-### Frontmatter Fields
+### Frontmatter Fields Reference
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Unique skill identifier |
-| `description` | Yes | Brief description (shown in listings) |
-| `trigger` | No | When to activate (natural language) |
-| `tools` | No | Restrict which tools the skill can use |
-| `env` | No | Environment variables injected from vault |
+| Field | Required | Type | Description |
+|-------|:--------:|------|-------------|
+| `name` | Yes | String | Unique identifier for the skill. Must be lowercase, alphanumeric, with hyphens. Used in `homun skills remove`. |
+| `description` | Yes | String | One-line summary shown in skill listings and marketplace. Keep it under 100 characters. |
+| `version` | No | String | Semantic version (e.g., `"1.0.0"`). Used for update detection. Must be quoted in YAML. |
+| `author` | No | String | Skill author name or GitHub username. |
+| `trigger` | No | String | Natural language description of when the skill should activate. The LLM uses this to decide if the skill is relevant to the current conversation. |
+| `tools` | No | Array | List of tool names the skill is allowed to use. If omitted, the skill can use all tools. If specified, only these tools are available during skill execution. This acts as a security allowlist. |
+| `env` | No | Array | Environment variable names to inject from the vault. Each variable must be stored in the vault before the skill can run. If any are missing, the skill is marked ineligible. |
+| `eligibility` | No | Object | Conditions that must be met for the skill to be available. |
+| `eligibility.channels` | No | Array | Channels where this skill is active (e.g., `["telegram", "web"]`). If omitted, active on all channels. |
+| `invocation` | No | String | How the skill is activated: `auto` (LLM decides based on trigger), `explicit` (user must name it), or `always` (always active in context). Default: `auto`. |
 
-## Skill Marketplace
+### Writing Effective Triggers
 
-Discover and install skills from two registries:
+The `trigger` field is a natural language description that the LLM evaluates against each incoming message. Write it as a clear condition:
 
-- **ClawHub** -- community marketplace for agent skills
-- **OpenSkills** -- open registry of compatible skills
+**Good triggers** (specific, actionable):
+- `when the user asks about weather, temperature, or forecast`
+- `when the user wants to deploy code to production`
+- `when the user asks to create or edit a GitHub issue`
 
-Browse available skills in the Web UI under **Skills > Marketplace**.
+**Bad triggers** (too vague, will activate too often):
+- `when the user needs help` (too broad)
+- `any question` (matches everything)
+- `code` (single word, ambiguous)
+
+If `trigger` is omitted, the skill never activates in `auto` mode. Use `invocation: always` for skills that should always be in context, or `invocation: explicit` for skills the user must name.
+
+### Writing Skill Instructions
+
+The body of `SKILL.md` (everything below the frontmatter) contains instructions for the agent. Write these as if you were briefing a capable assistant:
+
+1. **Be specific about tools**: name the exact tools and commands to use
+2. **Include error handling**: tell the agent what to do when things go wrong
+3. **Define output format**: describe how to present results to the user
+4. **Keep it focused**: one domain per skill, not a catch-all
+
+The instructions are loaded into the LLM's context window when the skill activates, so keep them concise. Aim for 50-200 lines of instructions. Very long instructions waste tokens and may confuse the model.
+
+## Skill Lifecycle
+
+Understanding the lifecycle helps you write better skills and debug issues.
+
+### 1. Loading (Startup / Hot-Reload)
+
+Homun scans all skill directories and parses each `SKILL.md` file. At this stage, only the frontmatter is read -- the body is not loaded into memory. This "progressive disclosure" approach keeps startup fast even with hundreds of skills installed.
+
+The loader validates:
+- YAML frontmatter is well-formed
+- Required fields (`name`, `description`) are present
+- No duplicate skill names across directories (higher-priority directory wins)
+- Version string is valid semver (if provided)
+
+If a `SKILL.md` has invalid YAML or missing required fields, it is skipped with a warning in the logs. Other skills load normally.
+
+### 2. Eligibility Check
+
+Before each conversation turn, Homun checks which skills are eligible based on:
+- **Channel**: is the current channel in the skill's `eligibility.channels` list?
+- **Environment**: are all required `env` variables present in the vault?
+- **Enabled**: is the skill enabled (not manually disabled by the user)?
+
+Ineligible skills are silently skipped -- they do not appear in the agent's context. If a skill is ineligible because of missing env variables, Homun logs a warning with the variable name so you can fix it.
+
+### 3. Invocation
+
+When a user sends a message, Homun evaluates which skills to activate:
+- `auto` skills: the LLM reads the `trigger` field and decides if the skill is relevant
+- `explicit` skills: the user must mention the skill by name (e.g., "use the weather skill")
+- `always` skills: always loaded into context on every turn
+
+For `auto` skills, the LLM sees only the skill name, description, and trigger -- not the full body. This keeps the context lean when many skills are installed.
+
+### 4. Execution
+
+When a skill is activated:
+1. The full `SKILL.md` body (instructions) is loaded into the agent's context
+2. Tool restrictions are applied (only tools listed in `tools` are available)
+3. Environment variables are decrypted from the vault and injected
+4. Scripts run with the injected environment in the sandbox
+
+### 5. Deactivation
+
+After the skill's task is complete, the skill instructions are removed from context to save token space for subsequent turns. The agent retains the results of the skill's work but not the instructions themselves.
 
 ## Security
 
-Before installing, Homun scans skill repositories for potentially dangerous patterns (shell commands, network calls, file system access). The scan results are shown before installation so you can review and approve.
+Homun takes skill security seriously. Skills can execute scripts and access tools, so every skill goes through security checks.
+
+### Pre-Install Security Scan
+
+When you install a skill via `homun skills add`, Homun scans the repository for:
+
+| Check | What It Detects |
+|-------|-----------------|
+| Shell injection | Commands that modify system files, install packages, or access sensitive paths |
+| Network exfiltration | Outbound requests to unusual endpoints, data upload patterns |
+| Filesystem access | Reads/writes outside expected directories |
+| Credential harvesting | Attempts to read credential files, keychain, or environment variables not declared in `env` |
+| Obfuscated code | Base64-encoded commands, eval statements, minified scripts |
+| Supply chain | Dependencies with known vulnerabilities |
+
+The scan results are displayed before installation. Each finding includes a severity level (low, medium, high, critical) and a description. You can review each finding and decide whether to proceed.
+
+High and critical findings require explicit confirmation. If you decline, the installation is cancelled and no files are written.
+
+### Runtime Isolation
+
+During execution:
+- Scripts run inside the [sandbox](/features/sandbox) with restricted filesystem and network access
+- Only tools listed in the `tools` field are available -- the skill cannot call other tools
+- Only vault secrets listed in `env` are injected -- the skill cannot access other vault entries
+- The exfiltration guard scans script output for leaked secrets before returning results to the LLM
+
+### Tool Restrictions
+
+The `tools` field in the frontmatter acts as an allowlist. If a skill declares `tools: [web_fetch, shell]`, it cannot use `file`, `vault`, `message`, or any other tool. This limits the blast radius if a skill behaves unexpectedly.
+
+If `tools` is omitted, all tools are available. For security-sensitive skills, always specify the minimum set of tools needed.
+
+## Skill Marketplace
+
+Discover and install community skills from two registries.
+
+### ClawHub
+
+ClawHub is a community marketplace for agent skills compatible with the Agent Skills standard. Browse skills at [clawhub.dev](https://clawhub.dev) or from the Web UI:
+
+1. Go to **Skills > Marketplace**
+2. Browse categories or search by keyword
+3. Click **Install** -- Homun handles download, security scan, and setup
+4. Review scan results and confirm
+
+ClawHub skills include ratings, install counts, and compatibility tags. Skills are published by community members and reviewed for basic quality.
+
+Homun also supports the `SKILL.toml` format used by some ClawHub skills. The adapter automatically converts `SKILL.toml` to the internal `SKILL.md` format during installation.
+
+### OpenSkills Registry
+
+OpenSkills is an open registry of skills maintained by the community. It focuses on interoperability -- skills listed here work across multiple AI assistants, not just Homun.
+
+Both registries are searchable from the CLI:
+
+```bash
+homun skills search "weather forecast"
+```
+
+Results show the skill name, description, author, registry source, and install instructions.
+
+### GitHub Discovery
+
+Any public GitHub repository with a `SKILL.md` can be installed directly:
+
+```bash
+homun skills add username/repo-name
+```
+
+You can also install from a specific branch or tag:
+
+```bash
+homun skills add username/repo-name@v2.0.0
+```
+
+## Environment Variable Injection
+
+Skills that need API keys or configuration values declare them in the `env` field. The values are stored in Homun's encrypted vault and injected at runtime.
+
+### Setup Flow
+
+1. Skill declares its requirements:
+   ```yaml
+   env:
+     - WEATHER_API_KEY
+     - GEOCODING_TOKEN
+   ```
+
+2. You store the values in the vault:
+   ```bash
+   homun vault set WEATHER_API_KEY "abc123"
+   homun vault set GEOCODING_TOKEN "xyz789"
+   ```
+
+   Or from the Web UI: go to **Vault** and add the secrets.
+
+3. When the skill runs, scripts receive these as environment variables:
+   ```python
+   import os
+   api_key = os.environ["WEATHER_API_KEY"]
+   ```
+
+If a required env variable is not in the vault, the skill is marked as ineligible and will not activate. Homun logs a warning explaining which variable is missing. The `homun skills list` command also shows the status:
+
+```
+deploy-helper   0.5.0    local    disabled (missing env: DEPLOY_TOKEN)
+```
+
+### Security of Injected Variables
+
+- Variables are decrypted from the AES-256-GCM vault only at the moment of execution
+- They are passed to the subprocess via environment, not command-line arguments (which would be visible in `ps`)
+- The exfiltration guard monitors script output for leaked secret values
+- Variables are zeroized from memory after the script completes
+
+## Example: Building a Weather Skill from Scratch
+
+Here is a step-by-step walkthrough for creating a weather skill that uses the OpenWeatherMap API.
+
+### Step 1: Create the Directory
+
+```bash
+mkdir -p ~/.homun/skills/weather/scripts
+```
+
+### Step 2: Write the Script
+
+Create `~/.homun/skills/weather/scripts/fetch.py`:
+
+```python
+import os, sys, json, urllib.request
+
+api_key = os.environ.get("OWM_API_KEY")
+if not api_key:
+    print(json.dumps({"error": "OWM_API_KEY not set"}))
+    sys.exit(1)
+
+location = sys.argv[1] if len(sys.argv) > 1 else "London"
+url = (
+    f"https://api.openweathermap.org/data/2.5/weather"
+    f"?q={location}&appid={api_key}&units=metric"
+)
+
+try:
+    with urllib.request.urlopen(url) as resp:
+        data = json.loads(resp.read())
+        result = {
+            "location": data["name"],
+            "temp": data["main"]["temp"],
+            "feels_like": data["main"]["feels_like"],
+            "description": data["weather"][0]["description"],
+            "humidity": data["main"]["humidity"],
+        }
+        print(json.dumps(result))
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
+    sys.exit(1)
+```
+
+Make it executable:
+
+```bash
+chmod +x ~/.homun/skills/weather/scripts/fetch.py
+```
+
+### Step 3: Write the SKILL.md
+
+Create `~/.homun/skills/weather/SKILL.md`:
+
+```markdown
+---
+name: weather
+description: Get current weather conditions for any city
+version: "1.0.0"
+author: your-username
+trigger: when the user asks about weather, temperature, or conditions
+tools:
+  - shell
+env:
+  - OWM_API_KEY
+---
+
+## Instructions
+
+When the user asks about the weather:
+
+1. Run: `python scripts/fetch.py "{city_name}"`
+2. Parse the JSON output
+3. Present the temperature, conditions, and humidity in a friendly format
+4. If the city is not found, suggest checking the spelling
+
+Always include the "feels like" temperature alongside the actual temperature.
+```
+
+### Step 4: Store the API Key
+
+```bash
+homun vault set OWM_API_KEY "your-openweathermap-api-key"
+```
+
+### Step 5: Verify the Skill Loaded
+
+```bash
+homun skills list
+```
+
+You should see `weather` in the list with status `active`.
+
+### Step 6: Test
+
+```bash
+homun chat -m "What's the weather in Rome?"
+```
+
+Homun will activate the weather skill, run the script, and present the results.
+
+## LLM-Driven Skill Generation
+
+Homun can create skills for you using the `skill_create` tool. Describe what you want in natural language:
+
+> "Create a skill that checks my GitHub notifications and summarizes them"
+
+Homun generates the complete skill package -- `SKILL.md` with frontmatter, Python/Bash scripts, and proper error handling. The generated skill is saved to `~/.homun/skills/` and immediately available.
+
+You can review and customize the generated code. The LLM produces a reasonable starting point, but you may want to adjust triggers, add error handling, or refine the output format.
+
+## Troubleshooting
+
+### Skill Not Found After Installation
+
+**Symptom**: `homun skills list` does not show a recently installed skill.
+
+**Check**:
+1. Verify the `SKILL.md` file exists in the skill directory
+2. Check that the YAML frontmatter is valid (no syntax errors)
+3. Look at the logs for parsing errors: `RUST_LOG=debug homun gateway`
+4. Ensure `name` and `description` fields are present in the frontmatter
+
+### Skill Shows "Disabled (Missing Env)"
+
+**Symptom**: skill appears in the list but is marked as disabled.
+
+**Fix**: store the missing environment variable in the vault:
+
+```bash
+homun vault set VARIABLE_NAME "value"
+```
+
+The variable name is shown in the disabled reason.
+
+### Script Permission Denied
+
+**Symptom**: skill activates but the script fails with a permission error.
+
+**Fix**: make the script executable:
+
+```bash
+chmod +x ~/.homun/skills/my-skill/scripts/run.py
+```
+
+On macOS/Linux, scripts must have the executable bit set. On Windows, this is not required.
+
+### Script Fails in Sandbox
+
+**Symptom**: script works outside Homun but fails when run as a skill.
+
+**Causes**:
+- The sandbox restricts filesystem and network access. The script may be trying to read files outside the skill directory.
+- Missing dependencies: the sandbox environment may not have Python packages the script needs. Install them in the Docker image or use only standard library modules.
+- Environment variables not declared in `env` are not available inside the sandbox.
+
+### Skill Activates When It Should Not
+
+**Symptom**: a skill activates on unrelated messages.
+
+**Fix**: make the `trigger` field more specific. Vague triggers like "when the user asks a question" will match almost everything. Use specific keywords and conditions.
+
+### Duplicate Skill Names
+
+**Symptom**: unexpected behavior, wrong skill version running.
+
+**Cause**: two skills with the same `name` in different directories. The higher-priority directory wins (user > project > built-in).
+
+**Fix**: rename one of the skills or remove the duplicate.

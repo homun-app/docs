@@ -1,57 +1,170 @@
 # Sandbox
 
-When Homun executes shell commands, they run inside an isolated sandbox by default. This prevents accidental damage to your system and limits what commands can access.
+When Homun executes shell commands, they run inside an isolated sandbox by default. The sandbox prevents accidental damage to your system, limits what commands can access, and provides an audit trail of all executions. This is one of Homun's core safety features -- it ensures that even if the AI makes a mistake or a skill behaves unexpectedly, the impact is contained.
+
+## Why Sandboxing Matters
+
+Homun's agent loop decides which commands to run based on your requests and the LLM's reasoning. While the LLM is highly capable, it can occasionally:
+- Run a command with unintended side effects (e.g., `rm -rf` with the wrong path)
+- Execute a script from a skill that accesses files outside its expected scope
+- Make a network request to an unexpected endpoint
+
+The sandbox catches these cases by restricting what commands can do, regardless of what was intended.
 
 ## How It Works
 
-The sandbox restricts:
+The sandbox restricts three categories of access:
 
-- **Filesystem access** -- commands can only read/write within allowed directories
-- **Network access** -- outbound connections can be limited
-- **Process isolation** -- commands run in a contained environment
+- **Filesystem access**: commands can only read/write within allowed directories (typically the current project directory and temp directories)
+- **Network access**: outbound connections can be blocked or limited to specific hosts
+- **Process isolation**: commands run in a contained environment with limited system access
+
+When a command attempts an action that violates sandbox restrictions, the command fails with a permission error. The error is reported to the agent, which can then ask you for permission to run the command without the sandbox.
 
 ## Backends
 
 Homun supports 4 sandbox backends and automatically selects the best one available on your system:
 
-| Backend | Platform | Isolation Level |
-|---------|----------|----------------|
-| **Docker** | All | Full container isolation (recommended) |
-| **Native (sandbox-exec)** | macOS | Kernel-level sandboxing |
-| **Bubblewrap** | Linux | Namespace-based isolation |
-| **Job Objects** | Windows | Process group restrictions |
+| Backend | Platform | Isolation Level | Speed | Requirements |
+|---------|----------|:---------------:|:-----:|:-------------|
+| **Docker** | All | Full container isolation | Moderate | Docker installed and running |
+| **Native (sandbox-exec)** | macOS | Kernel-level sandboxing | Fast | None (built into macOS) |
+| **Bubblewrap** | Linux | Namespace-based isolation | Fast | bubblewrap package |
+| **Job Objects** | Windows | Process group restrictions | Fast | None (built into Windows) |
+
+### Auto-Detection
+
+When `backend` is set to `"auto"` (the default), Homun checks for available backends in order of isolation strength:
+
+1. **Docker** -- if Docker is installed and the daemon is running
+2. **Native/Bubblewrap** -- platform-specific (sandbox-exec on macOS, bubblewrap on Linux)
+3. **Job Objects** -- on Windows
+4. **None** -- if no backend is available, commands run unsandboxed (with a warning)
+
+The selected backend is logged at startup so you can verify which isolation is active.
 
 ## Configuration
 
 ```toml
 [sandbox]
-backend = "docker"    # docker, native, bubblewrap, or auto
 enabled = true
+backend = "auto"    # auto, docker, native, bubblewrap, or windows
 ```
 
-When set to `auto` (the default), Homun detects which backends are available and picks the strongest one.
+### Core Settings
 
-### Docker Backend
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `enabled` | Boolean | `true` | Enable/disable sandboxing globally |
+| `backend` | String | `"auto"` | Which backend to use: `auto`, `docker`, `native`, `bubblewrap`, `windows` |
+
+## Docker Backend
 
 Docker provides the strongest isolation. Commands run inside a container with:
 
-- No access to the host filesystem (except mounted directories)
-- Separate network namespace
+- No access to the host filesystem (except explicitly mounted directories)
+- Separate network namespace (can be fully isolated or bridged)
 - Resource limits (CPU, memory)
+- Clean environment (no host environment variables leak in)
 
-Make sure Docker is installed and running:
+### Setup
+
+Make sure Docker is installed and the daemon is running:
 
 ```bash
 docker --version
+docker info    # Verify daemon is running
 ```
 
-### Native Backend (macOS)
+On Linux, your user must be in the `docker` group or the gateway must run as root (not recommended):
 
-On macOS, the native backend uses Apple's `sandbox-exec` for kernel-level restriction. No additional software needed.
+```bash
+sudo usermod -aG docker $USER
+# Log out and back in for the group change to take effect
+```
 
-### Bubblewrap Backend (Linux)
+### How Docker Sandbox Works
 
-On Linux, install Bubblewrap for namespace-based isolation:
+When a command is sandboxed with Docker:
+
+1. Homun selects the runtime image (configurable, defaults to a lightweight image with common tools)
+2. The current working directory is mounted as a volume inside the container
+3. Required environment variables are injected (from skill `env` declarations)
+4. The command runs inside the container with a non-root user
+5. Output (stdout/stderr) is captured and returned to the agent
+6. The container is removed after execution
+
+### Runtime Images
+
+The Docker backend uses a runtime image for sandboxed execution. You can customize which image is used:
+
+```toml
+[sandbox]
+backend = "docker"
+docker_image = "homun-sandbox:latest"    # Custom image
+```
+
+If no custom image is specified, Homun uses a default lightweight image with:
+- Python 3
+- Node.js
+- Common Unix utilities (curl, jq, git, etc.)
+- A non-root user for execution
+
+To build a custom sandbox image with additional tools:
+
+```dockerfile
+FROM homun-sandbox:latest
+RUN apt-get update && apt-get install -y postgresql-client redis-tools
+```
+
+### Docker Pros and Cons
+
+**Pros**:
+- Strongest isolation -- full container boundary
+- Works on all platforms (Linux, macOS, Windows)
+- Custom images let you pre-install required tools
+- Network can be fully isolated
+
+**Cons**:
+- Slower startup (~200-500ms per command for container creation)
+- Requires Docker to be installed and running
+- Uses more memory than native backends
+- Some system-level commands (e.g., hardware access) cannot work in a container
+
+## Native Backend (macOS)
+
+On macOS, the native backend uses Apple's `sandbox-exec` for kernel-level restriction. No additional software is needed -- it is built into macOS.
+
+### What Gets Restricted
+
+- **Filesystem**: read access to most system directories; write access limited to the current project and temp directories
+- **Network**: outbound connections allowed by default (configurable)
+- **Processes**: cannot spawn privileged processes or access other users' files
+
+### How It Works
+
+Homun generates a sandbox profile (a set of rules in Apple's sandbox language) for each command execution. The profile specifies exactly which filesystem paths, network operations, and system calls are allowed.
+
+### Native Backend Pros and Cons
+
+**Pros**:
+- No extra software needed
+- Very fast (no container startup overhead)
+- Kernel-level enforcement (cannot be bypassed by the sandboxed process)
+
+**Cons**:
+- macOS only
+- Less isolation than Docker (shares the host network by default)
+- Apple's sandbox profiles are complex and not well-documented
+- Some operations may be unexpectedly blocked
+
+## Bubblewrap Backend (Linux)
+
+On Linux, Bubblewrap provides lightweight namespace-based isolation. It creates a new filesystem and process namespace for each command, similar to how Flatpak isolates applications.
+
+### Setup
+
+Install Bubblewrap:
 
 ```bash
 # Debian/Ubuntu
@@ -59,21 +172,174 @@ sudo apt install bubblewrap
 
 # Fedora
 sudo dnf install bubblewrap
+
+# Arch Linux
+sudo pacman -S bubblewrap
 ```
+
+Verify installation:
+
+```bash
+bwrap --version
+```
+
+### What Gets Restricted
+
+- **Filesystem**: new mount namespace with only specified paths visible
+- **Processes**: new PID namespace (cannot see host processes)
+- **Network**: can be isolated (new network namespace) or shared
+- **Users**: runs as an unprivileged user inside the namespace
+
+### Bubblewrap Pros and Cons
+
+**Pros**:
+- Very fast (millisecond startup, no container overhead)
+- Strong isolation via Linux namespaces
+- No daemon required (unlike Docker)
+- Low resource usage
+
+**Cons**:
+- Linux only
+- Requires kernel support for user namespaces (most modern kernels have this)
+- Less tooling and debugging support compared to Docker
+
+## Windows Job Objects Backend
+
+On Windows, the Job Objects backend uses Windows API process isolation. This is the weakest sandbox option but requires no additional software.
+
+### What Gets Restricted
+
+- **Processes**: commands run in a Job Object with limited privileges
+- **Resources**: CPU and memory limits can be applied
+- **Filesystem**: limited restrictions (Windows Job Objects do not provide filesystem isolation)
+
+### Limitations
+
+Windows Job Objects provide process-level restrictions but do not create filesystem or network isolation. For stronger isolation on Windows, use the Docker backend.
+
+### Job Objects Pros and Cons
+
+**Pros**:
+- No extra software needed on Windows
+- Fast startup
+- Resource limits (CPU, memory) are enforced
+
+**Cons**:
+- Weakest isolation of all backends
+- No filesystem isolation
+- No network isolation
+- Commands can access host files and network
+
+## Environment Injection
+
+When running sandboxed commands, environment variables from skill declarations are injected:
+
+1. The skill's `env` field lists required variables (e.g., `WEATHER_API_KEY`)
+2. Homun retrieves these values from the encrypted vault
+3. Values are injected as environment variables into the sandbox
+4. The sandboxed process can read them via `os.environ` (Python), `process.env` (Node.js), or `$VAR` (Bash)
+
+Only explicitly declared variables are injected. The sandbox does not inherit the host's full environment. This prevents accidental leakage of sensitive host variables.
+
+## Event Logging
+
+Every sandboxed execution is logged for audit purposes:
+
+| Field | Description |
+|-------|-------------|
+| Timestamp | When the command ran |
+| Command | The executed command |
+| Backend | Which sandbox backend was used |
+| Exit code | Success (0) or failure code |
+| Duration | How long the command took |
+| Output size | Bytes of stdout/stderr produced |
+
+These logs are stored in the SQLite database and accessible from the Web UI under **Logs** (filter by tool: shell).
 
 ## When to Disable the Sandbox
 
 In some cases you may need to disable the sandbox:
 
-- Running system administration commands that need full access
-- Installing software that requires root privileges
-- Accessing hardware devices
+- **System administration**: commands that need full system access (installing packages, managing services)
+- **Hardware access**: commands that interact with devices (serial ports, USB)
+- **Docker-in-Docker**: running Docker commands inside a Docker sandbox does not work without special configuration
+- **Performance**: for trusted scripts that run frequently, removing the sandbox overhead may be worthwhile
 
-You can disable it per-command by telling Homun to run a command without the sandbox, or globally:
+### Disabling Per-Command
+
+Tell Homun to run a specific command without the sandbox:
+
+> "Run this command without the sandbox: sudo apt update"
+
+Homun will ask for confirmation before running unsandboxed commands.
+
+### Disabling Globally
 
 ```toml
 [sandbox]
 enabled = false
 ```
 
-Keep the sandbox enabled for everyday use. Only disable it when you trust the commands being executed and understand the implications.
+Keep the sandbox enabled for everyday use. Only disable it when you trust the commands being executed and understand the implications. When the sandbox is disabled, all shell commands have full access to your system.
+
+## Troubleshooting
+
+### Docker Not Running
+
+**Symptom**: sandbox fails with "Cannot connect to Docker daemon"
+
+**Fix**:
+```bash
+# Start Docker
+sudo systemctl start docker    # Linux
+open -a Docker                 # macOS
+
+# Verify
+docker info
+```
+
+### Permission Denied in Sandbox
+
+**Symptom**: command fails with permission errors even though it works outside the sandbox.
+
+**Causes**:
+- The command is trying to access a path not mounted in the sandbox
+- The command needs elevated privileges (sudo)
+- File permissions inside the container do not match host permissions
+
+**Fix**: check what path the command is accessing. If it is a legitimate need, consider:
+1. Running without sandbox for this specific command
+2. Mounting additional paths in the Docker configuration
+3. Using a custom Docker image with the required permissions
+
+### Command Not Found in Sandbox
+
+**Symptom**: a command that exists on the host is not found inside the sandbox.
+
+**Cause**: the sandbox environment has its own set of installed tools. The Docker container may not have the same tools as your host system.
+
+**Fix**:
+1. Use a custom Docker image that includes the required tools
+2. For Docker: `docker_image = "your-custom-image:latest"` in config
+3. For native/bubblewrap: the host tools are usually available, so this is less common
+
+### Slow Execution with Docker
+
+**Symptom**: commands take noticeably longer than running directly.
+
+**Cause**: Docker container creation adds ~200-500ms overhead per command.
+
+**Mitigation**:
+- For frequent commands, consider using the native backend instead
+- Batch multiple operations into a single script to reduce container creation overhead
+- Pre-pull the sandbox image to avoid download delays on first run
+
+### Sandbox Selection Verification
+
+To verify which sandbox backend is active:
+
+```bash
+RUST_LOG=debug homun gateway 2>&1 | grep -i sandbox
+```
+
+The logs show which backend was selected and why. If no backend is available, you will see a warning about running unsandboxed.
