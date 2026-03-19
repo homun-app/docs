@@ -1,8 +1,11 @@
 export default {
   index: { title: 'Introduction', theme: { layout: 'default' } },
   'getting-started': 'Getting Started',
-  architecture: 'Architecture',
-  services: 'Services',
-  guides: 'Guides',
+  installation: 'Installation',
+  channels: 'Channels',
+  configuration: 'Configuration',
+  features: 'Features',
+  'web-ui': 'Web UI',
   reference: 'Reference',
+  troubleshooting: 'Troubleshooting',
 }

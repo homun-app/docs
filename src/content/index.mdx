@@ -4,45 +4,48 @@
 
 Homun is a single-binary, local-first, privacy-focused AI agent written in Rust. Manage it via Telegram, WhatsApp, Discord, Slack, Email, Web UI, or CLI. Extend it with the open **Agent Skills** standard.
 
-## Why Homun?
-
-- **Single binary** — no Python, no Node.js, no Docker required to run
-- **Local-first** — your data stays on your machine (or your VPS)
-- **Multi-channel** — Telegram, WhatsApp, Discord, Slack, Email, Web, CLI
-- **Any LLM** — Claude, GPT-4, Ollama, DeepSeek, Groq, and more
-- **Skill-powered** — extensible via the open Agent Skills ecosystem
-- **Always-on** — cron jobs, automations, workflows that run while you sleep
-
 ## Quick Start
 
 ```bash
-# Docker (recommended)
 git clone https://github.com/homun-app/homun.git
-cd homun
-cp .env.example .env
+cd homun && cp .env.example .env
 docker compose up -d
 ```
 
-Open **https://localhost** and complete the setup wizard.
+Open **https://localhost** and complete the setup wizard. [Full installation guide &rarr;](/installation/docker)
 
-## Architecture at a Glance
+## Why Homun?
 
-```
-┌─────────────┐   ┌──────────────┐   ┌─────────────┐
-│  Channels   │──▶│  Agent Loop  │──▶│    Tools     │
-│ TG/WA/Web/… │   │  (ReAct)     │   │ 20+ built-in│
-└─────────────┘   └──────┬───────┘   └─────────────┘
-                         │
-                  ┌──────┴───────┐
-                  │  LLM Gateway │
-                  │ 14 models    │
-                  └──────────────┘
-```
+- **Single binary** — no Python, no Node.js runtime needed
+- **Local-first** — your data stays on your machine or VPS
+- **Multi-channel** — Telegram, WhatsApp, Discord, Slack, Email, Web, CLI
+- **Any LLM** — Claude, GPT-4, Ollama, DeepSeek, Groq, and 14+ models
+- **Skill-powered** — extensible via the open Agent Skills ecosystem
+- **Always-on** — cron jobs, automations, and workflows that run while you sleep
 
-## Documentation
+## Explore the Docs
 
-- [Getting Started](/getting-started) — from zero to your first chat in 15 minutes
-- [Architecture](/architecture) — deep dives into browser, memory, security
-- [Services](/services) — per-domain implementation docs
-- [Guides](/guides) — development, testing, remote access
-- [Reference](/reference) — REST API specification
+### Get Up and Running
+- [Getting Started](/getting-started) — zero to first chat in 15 minutes
+- [Installation](/installation/docker) — Docker, build from source, or system service
+- [Setup Wizard](/web-ui/setup-wizard) — first-time configuration walkthrough
+
+### Connect Your Channels
+- [Telegram](/channels/telegram) · [WhatsApp](/channels/whatsapp) · [Discord](/channels/discord) · [Slack](/channels/slack) · [Email](/channels/email) · [Web UI](/channels/web) · [CLI](/channels/cli)
+
+### Configure & Customize
+- [LLM Providers](/configuration/providers) — set up Claude, GPT-4, Ollama, and more
+- [Security](/configuration/security) — authentication, vault, 2FA, API keys
+- [Remote Access](/configuration/remote-access) — access Homun from anywhere
+
+### Features
+- [Skills](/features/skills) — install and create agent skills
+- [Memory & Knowledge](/features/memory) — long-term memory and RAG knowledge base
+- [Automations](/features/automations) — cron jobs, visual flows, and workflows
+- [Browser Automation](/features/browser) — autonomous web browsing
+- [Built-in Tools](/features/tools) — 20+ tools for files, web, shell, and more
+
+### Reference
+- [REST API](/reference/api) — 50+ endpoints
+- [CLI Commands](/reference/cli-commands) — full command reference
+- [Troubleshooting](/troubleshooting) — common issues and fixes

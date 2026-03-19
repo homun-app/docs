@@ -1,0 +1,17 @@
+.logo-light,
+.logo-dark {
+  height: 28px;
+  width: auto;
+}
+
+.logo-dark {
+  display: none;
+}
+
+:is(html[class~="dark"]) .logo-light {
+  display: none;
+}
+
+:is(html[class~="dark"]) .logo-dark {
+  display: block;
+}

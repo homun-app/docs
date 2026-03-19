@@ -2,6 +2,7 @@ import { Footer, Layout, Navbar } from 'nextra-theme-docs'
 import { Head } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
 import 'nextra-theme-docs/style.css'
+import './globals.css'
 
 export const metadata = {
   title: {
@@ -21,9 +22,10 @@ export const metadata = {
 const navbar = (
   <Navbar
     logo={
-      <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-        🧪 Homun
-      </span>
+      <>
+        <img src="/homun.png" alt="Homun" className="logo-light" />
+        <img src="/homun_white.png" alt="Homun" className="logo-dark" />
+      </>
     }
     projectLink="https://github.com/homun-app/homun"
   />
