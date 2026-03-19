@@ -1,0 +1,48 @@
+# Homun
+
+**Your personal AI assistant** — a digital homunculus that lives on your machine and works 24/7.
+
+Homun is a single-binary, local-first, privacy-focused AI agent written in Rust. Manage it via Telegram, WhatsApp, Discord, Slack, Email, Web UI, or CLI. Extend it with the open **Agent Skills** standard.
+
+## Why Homun?
+
+- **Single binary** — no Python, no Node.js, no Docker required to run
+- **Local-first** — your data stays on your machine (or your VPS)
+- **Multi-channel** — Telegram, WhatsApp, Discord, Slack, Email, Web, CLI
+- **Any LLM** — Claude, GPT-4, Ollama, DeepSeek, Groq, and more
+- **Skill-powered** — extensible via the open Agent Skills ecosystem
+- **Always-on** — cron jobs, automations, workflows that run while you sleep
+
+## Quick Start
+
+```bash
+# Docker (recommended)
+git clone https://github.com/homunbot/homun.git
+cd homun
+cp .env.example .env
+docker compose up -d
+```
+
+Open **https://localhost** and complete the setup wizard.
+
+## Architecture at a Glance
+
+```
+┌─────────────┐   ┌──────────────┐   ┌─────────────┐
+│  Channels   │──▶│  Agent Loop  │──▶│    Tools     │
+│ TG/WA/Web/… │   │  (ReAct)     │   │ 20+ built-in│
+└─────────────┘   └──────┬───────┘   └─────────────┘
+                         │
+                  ┌──────┴───────┐
+                  │  LLM Gateway │
+                  │ 14 models    │
+                  └──────────────┘
+```
+
+## Documentation
+
+- [Getting Started](/getting-started) — from zero to your first chat in 15 minutes
+- [Architecture](/architecture) — deep dives into browser, memory, security
+- [Services](/services) — per-domain implementation docs
+- [Guides](/guides) — development, testing, remote access
+- [Reference](/reference) — REST API specification

@@ -1,0 +1,18 @@
+export default {
+  index: 'Service Map',
+  'runtime-and-config': 'Runtime & Config',
+  'agent-and-gateway': 'Agent & Gateway',
+  'web-control-plane': 'Web Control Plane',
+  channels: 'Channels',
+  providers: 'LLM Providers',
+  tools: 'Tools',
+  'skills-and-mcp': 'Skills & MCP',
+  'memory-and-knowledge': 'Memory & Knowledge',
+  'storage-and-sessions': 'Storage & Sessions',
+  security: 'Security',
+  browser: 'Browser',
+  business: 'Business Autopilot',
+  'automation-and-workflows': 'Automations & Workflows',
+  'service-management': 'Service Management',
+  contacts: 'Contacts',
+}
